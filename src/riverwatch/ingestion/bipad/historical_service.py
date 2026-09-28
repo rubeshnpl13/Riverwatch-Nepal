@@ -5,10 +5,21 @@ from itertools import islice
 
 from riverwatch.ingestion.bipad.client import BipadClient
 from riverwatch.ingestion.bipad.endpoints import BipadEndpoint
+from riverwatch.ingestion.bipad.manifest_writer import (
+    BipadRunManifestWriter,
+)
 from riverwatch.ingestion.bipad.mapper import (
     map_bipad_river_record,
 )
-from riverwatch.ingestion.bipad.schemas import BipadRiverRecord
+from riverwatch.ingestion.bipad.quarantine_writer import (
+    BipadQuarantineWriter,
+)
+from riverwatch.ingestion.bipad.raw_writer import (
+    BipadRawPageWriter,
+)
+from riverwatch.ingestion.bipad.schemas import (
+    BipadRiverRecord,
+)
 from riverwatch.ingestion.bipad.validation import (
     QuarantinedRecord,
     validate_records,
@@ -25,6 +36,12 @@ from riverwatch.ingestion.models import (
     HistoricalRiverIngestionBatch,
 )
 from riverwatch.models import RiverObservation
+from riverwatch.storage.quarantine import (
+    QuarantineWriteResult,
+)
+from riverwatch.storage.raw import (
+    RawPageWriteResult,
+)
 
 
 def utc_now() -> datetime:
@@ -44,11 +61,17 @@ class HistoricalRiverBackfillService:
         client: BipadClient,
         logger: logging.Logger,
         batch_handler: BatchHandler,
+        raw_writer: BipadRawPageWriter | None = None,
+        quarantine_writer: BipadQuarantineWriter | None = None,
+        manifest_writer: BipadRunManifestWriter | None = None,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._client = client
         self._logger = logger
         self._batch_handler = batch_handler
+        self._raw_writer = raw_writer
+        self._quarantine_writer = quarantine_writer
+        self._manifest_writer = manifest_writer
         self._now = now
 
     def run(
@@ -93,6 +116,14 @@ class HistoricalRiverBackfillService:
 
         ingested_at = self._now()
 
+        raw_page_results: list[
+            RawPageWriteResult
+        ] = []
+
+        quarantine_results: list[
+            QuarantineWriteResult
+        ] = []
+
         global_record_index = start_offset
 
         pages = self._client.iter_pages(
@@ -112,6 +143,23 @@ class HistoricalRiverBackfillService:
         for batch_index, page in enumerate(
             limited_pages
         ):
+            if self._raw_writer is not None:
+                raw_result = (
+                    self._raw_writer.write_page(
+                        page=page,
+                        endpoint=(
+                            BipadEndpoint.RIVER
+                        ),
+                        run_id=tracker.run_id,
+                        captured_at=ingested_at,
+                        page_index=batch_index,
+                    )
+                )
+
+                raw_page_results.append(
+                    raw_result
+                )
+
             if not page.results:
                 continue
 
@@ -142,6 +190,24 @@ class HistoricalRiverBackfillService:
                     quarantined_records.append(
                         validation_result
                     )
+
+                    if (
+                        self._quarantine_writer
+                        is not None
+                    ):
+                        quarantine_result = (
+                            self._quarantine_writer.write_record(
+                                record=validation_result,
+                                run_id=tracker.run_id,
+                                captured_at=ingested_at,
+                                page_index=batch_index,
+                            )
+                        )
+
+                        quarantine_results.append(
+                            quarantine_result
+                        )
+
                     continue
 
                 observation = map_bipad_river_record(
@@ -177,6 +243,16 @@ class HistoricalRiverBackfillService:
             )
 
         run_result = tracker.finish()
+
+        if self._manifest_writer is not None:
+            self._manifest_writer.write_manifest(
+                run_result=run_result,
+                captured_at=ingested_at,
+                raw_pages=raw_page_results,
+                quarantine_objects=(
+                    quarantine_results
+                ),
+            )
 
         for quarantined_record in (
             run_result.quarantined_records

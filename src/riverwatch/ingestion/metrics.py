@@ -307,3 +307,7 @@ class IngestionRunTracker:
                 self._quarantined_records
             ),
         )
+
+    @property
+    def run_id(self) -> str:
+        return self._run_id

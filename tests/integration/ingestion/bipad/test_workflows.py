@@ -19,7 +19,6 @@ from riverwatch.ingestion.models import (
     HistoricalRiverIngestionBatch,
 )
 
-
 BASE_URL = "https://bipadportal.gov.np"
 
 STATION_FIXTURE = Path(

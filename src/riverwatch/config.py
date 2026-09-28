@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    gcp_project_id: str | None = None
+
+    gcs_bucket_name: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

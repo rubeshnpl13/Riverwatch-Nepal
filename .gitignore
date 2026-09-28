@@ -9,7 +9,10 @@ venv/
 
 # Environment variables
 .env
+# Environment
 
+.env.*
+!.env.example
 # Testing
 .pytest_cache/
 .coverage
@@ -47,3 +50,6 @@ logs/
 
 # Local API inspection data
 data/inspection/
+
+# Local RiverWatch data lake
+data/lake/

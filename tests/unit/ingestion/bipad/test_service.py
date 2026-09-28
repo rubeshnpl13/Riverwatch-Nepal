@@ -9,8 +9,14 @@ import respx
 from riverwatch.ingestion.bipad.client import (
     BipadClient,
 )
+from riverwatch.ingestion.bipad.raw_writer import (
+    BipadRawPageWriter,
+)
 from riverwatch.ingestion.bipad.service import (
     RiverStationIngestionService,
+)
+from riverwatch.storage.local import (
+    LocalObjectStore,
 )
 
 BASE_URL = "https://bipadportal.gov.np"
@@ -422,4 +428,135 @@ def test_batch_uses_single_ingestion_timestamp() -> None:
         for observation in (
             batch.observations
         )
+    )
+
+#persistence test
+
+@respx.mock
+def test_station_ingestion_archives_raw_pages(
+    tmp_path: Path,
+) -> None:
+    url = (
+        "https://bipadportal.gov.np/"
+        "api/v1/river-stations/"
+    )
+
+    second_url = (
+        "https://bipadportal.gov.np/"
+        "api/v1/river-stations/"
+        "?limit=1000&offset=1000"
+    )
+
+    station = load_station_fixture()
+
+    def responder(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        offset = request.url.params.get(
+            "offset"
+        )
+
+        if offset is None:
+            return httpx.Response(
+                200,
+                json={
+                    "count": 9223372036854775807,
+                    "next": second_url,
+                    "previous": None,
+                    "results": [
+                        station,
+                    ],
+                },
+                request=request,
+            )
+
+        if offset == "1000":
+            return httpx.Response(
+                200,
+                json={
+                    "count": 9223372036854775807,
+                    "next": (
+                        "https://bipadportal.gov.np/"
+                        "api/v1/river-stations/"
+                        "?limit=1000&offset=2000"
+                    ),
+                    "previous": url,
+                    "results": [],
+                },
+                request=request,
+            )
+
+        raise AssertionError(
+            f"Unexpected URL: {request.url}"
+        )
+
+    respx.get(
+        url
+    ).mock(
+        side_effect=responder
+    )
+
+    store = LocalObjectStore(
+        root=tmp_path
+    )
+
+    raw_writer = BipadRawPageWriter(
+        store=store
+    )
+
+    ingestion_time = datetime(
+        2026,
+        9,
+        29,
+        2,
+        0,
+        tzinfo=UTC,
+    )
+
+    logger = logging.getLogger(
+        "riverwatch.test.ingestion"
+    )
+
+    with create_client() as client:
+        service = RiverStationIngestionService(
+            client=client,
+            logger=logger,
+            raw_writer=raw_writer,
+            now=lambda: ingestion_time,
+        )
+
+        batch = service.run()
+
+    assert len(
+        batch.stations
+    ) == 1
+
+    payload_files = sorted(
+        tmp_path.rglob(
+            "payload.json"
+        )
+    )
+
+    metadata_files = sorted(
+        tmp_path.rglob(
+            "metadata.json"
+        )
+    )
+
+    assert len(
+        payload_files
+    ) == 2
+
+    assert len(
+        metadata_files
+    ) == 2
+
+    assert (
+        "page=000000"
+        in str(payload_files[0])
+    )
+
+    assert (
+        "page=000001"
+        in str(payload_files[1])
     )
