@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_env: str = "local"
 
     bipad_base_url: str = "https://bipadportal.gov.np"
+    bipad_api_version: str = "v1"
 
     http_timeout_seconds: float = Field(default=10.0, gt=0)
     http_max_retries: int = Field(default=3, ge=0)

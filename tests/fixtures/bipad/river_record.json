@@ -1,0 +1,31 @@
+{
+  "id": 18707479,
+  "createdOn": "2025-08-08T14:05:16.441824+05:45",
+  "modifiedOn": "2025-08-08T14:05:16.441851+05:45",
+  "title": "Duduwa River(364)",
+  "basin": "West Rapti",
+  "point": {
+    "type": "Point",
+    "coordinates": [
+      81.697579,
+      28.202405
+    ]
+  },
+  "waterLevel": 0.201000213623,
+  "image": "http://daq.hydrology.gov.np/images/67e173c27b215d1bab92c9a243be6084",
+  "dangerLevel": 6.0,
+  "warningLevel": 5.5,
+  "waterLevelOn": "2025-08-08T13:50:00+05:45",
+  "status": "BELOW WARNING LEVEL",
+  "elevation": 162,
+  "steady": "STEADY",
+  "description": "Duduwa River(364) at Masurikhet",
+  "stationSeriesId": 19260,
+  "dataSource": "hydrology.gov.np",
+  "dataSourceId": null,
+  "ward": 2170,
+  "municipality": 57005,
+  "district": 66,
+  "province": 5,
+  "station": 44
+}

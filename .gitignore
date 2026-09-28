@@ -44,3 +44,6 @@ data/curated/
 # Logs
 *.log
 logs/
+
+# Local API inspection data
+data/inspection/
