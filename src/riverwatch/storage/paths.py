@@ -6,6 +6,9 @@ from riverwatch.ingestion.bipad.endpoints import (
 from riverwatch.models.source import (
     DataProvider,
 )
+from riverwatch.processing.models import (
+    ProcessedDataset,
+)
 from riverwatch.storage.errors import (
     InvalidObjectKeyError,
 )
@@ -180,4 +183,31 @@ def build_run_manifest_key(
         f"hour={timestamp:%H}/"
         f"run_id={safe_run_id}/"
         f"manifest.json"
+    )
+
+def build_processed_run_prefix(
+    *,
+    dataset: ProcessedDataset,
+    endpoint: BipadEndpoint,
+    captured_at: datetime,
+    run_id: str,
+) -> str:
+    safe_run_id = _validate_segment(
+        "run_id",
+        run_id,
+    )
+
+    timestamp = captured_at.astimezone(
+        UTC
+    )
+
+    return (
+        f"processed/"
+        f"dataset={dataset.value}/"
+        f"endpoint={endpoint.value}/"
+        f"year={timestamp:%Y}/"
+        f"month={timestamp:%m}/"
+        f"day={timestamp:%d}/"
+        f"hour={timestamp:%H}/"
+        f"run-{safe_run_id}"
     )

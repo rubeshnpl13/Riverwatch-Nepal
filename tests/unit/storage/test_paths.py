@@ -12,10 +12,14 @@ from riverwatch.ingestion.bipad.endpoints import (
 from riverwatch.models.source import (
     DataProvider,
 )
+from riverwatch.processing.models import (
+    ProcessedDataset,
+)
 from riverwatch.storage.errors import (
     InvalidObjectKeyError,
 )
 from riverwatch.storage.paths import (
+    build_processed_run_prefix,
     build_quarantine_record_key,
     build_raw_metadata_key,
     build_raw_page_prefix,
@@ -129,6 +133,7 @@ def test_rejects_negative_page_index() -> None:
             page_index=-1,
         )
 
+
 def test_builds_quarantine_record_key() -> None:
     captured_at = datetime.fromisoformat(
         "2026-09-29T03:00:00+00:00"
@@ -156,6 +161,7 @@ def test_builds_quarantine_record_key() -> None:
         "record=000001042.json"
     )
 
+
 def test_builds_run_manifest_key() -> None:
     captured_at = datetime.fromisoformat(
         "2026-09-29T03:00:00+00:00"
@@ -178,4 +184,30 @@ def test_builds_run_manifest_key() -> None:
         "hour=03/"
         "run_id=run-123/"
         "manifest.json"
+    )
+
+
+def test_builds_processed_run_prefix() -> None:
+    captured_at = datetime.fromisoformat(
+        "2026-09-29T03:00:00+00:00"
+    )
+
+    prefix = build_processed_run_prefix(
+        dataset=(
+            ProcessedDataset.OBSERVATIONS
+        ),
+        endpoint=BipadEndpoint.RIVER,
+        captured_at=captured_at,
+        run_id="run-123",
+    )
+
+    assert prefix == (
+        "processed/"
+        "dataset=observations/"
+        "endpoint=river/"
+        "year=2026/"
+        "month=09/"
+        "day=29/"
+        "hour=03/"
+        "run-run-123"
     )
