@@ -17,6 +17,8 @@ dependencies = [
     "tenacity>=9.0,<10.0",
     "pyspark>=4.2,<4.3",
     "duckdb",
+    "fastapi",
+    "uvicorn",
 ]
 
 
@@ -27,6 +29,7 @@ dev = [
     "respx>=0.21,<1.0",
     "ruff>=0.7,<1.0",
     "mypy>=1.13,<2.0",
+    "httpx2>=2.0.0",
 ]
 
 
