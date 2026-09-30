@@ -17,6 +17,15 @@ from riverwatch.analytics.service import (
 from riverwatch.api.routes.health import (
     router as health_router,
 )
+from riverwatch.api.routes.observations import (
+    router as observations_router,
+)
+from riverwatch.api.routes.stations import (
+    router as stations_router,
+)
+from riverwatch.api.routes.summaries import (
+    router as summaries_router,
+)
 
 API_PREFIX = "/api/v1"
 
@@ -61,8 +70,11 @@ def create_app(
     app = FastAPI(
         title="RiverWatch API",
         description=(
-            "API for RiverWatch river monitoring "
-            "and analytics."
+            "Read-only API for RiverWatch river "
+            "monitoring and analytics. "
+            "RiverWatch freshness and quality "
+            "metrics are not official flood "
+            "warnings."
         ),
         version="0.1.0",
         lifespan=lifespan,
@@ -76,6 +88,18 @@ def create_app(
 
     app.include_router(
         health_router,
+        prefix=API_PREFIX,
+    )
+    app.include_router(
+        stations_router,
+        prefix=API_PREFIX,
+    )
+    app.include_router(
+        observations_router,
+        prefix=API_PREFIX,
+    )
+    app.include_router(
+        summaries_router,
         prefix=API_PREFIX,
     )
 

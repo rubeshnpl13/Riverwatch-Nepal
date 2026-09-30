@@ -238,3 +238,4 @@ def test_response_schema_rejects_naive_datetime() -> None:
             run_id="history",
             ingested_at=None,
         )
+
