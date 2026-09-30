@@ -95,3 +95,4 @@ class ProcessingRunResult(BaseModel):
         ProcessedOutput,
         ...,
     ]
+    quality_report_path: Path

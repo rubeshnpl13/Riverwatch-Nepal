@@ -126,7 +126,6 @@ def build_manifest(
         / manifest_result.object.key
     )
 
-#historic pipeline test
 
 def test_processes_historical_manifest_to_parquet(
     spark: SparkSession,
@@ -182,7 +181,27 @@ def test_processes_historical_manifest_to_parquet(
 
     assert restored.count() == 1
 
-#station pipeling test
+    assert (
+        result.quality_report_path.exists()
+    )
+
+    report_text = (
+        result.quality_report_path
+        .read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert (
+        '"endpoint":"river"'
+        in report_text
+    )
+
+    assert (
+        '"total_rows":1'
+        in report_text
+    )
+
 
 def test_processes_station_manifest_to_two_outputs(
     spark: SparkSession,
@@ -241,4 +260,25 @@ def test_processes_station_manifest_to_two_outputs(
             ProcessedDataset.OBSERVATIONS
         ].row_count
         == 1
+    )
+
+    assert (
+        result.quality_report_path.exists()
+    )
+
+    report_text = (
+        result.quality_report_path
+        .read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert (
+        '"endpoint":"river-stations"'
+        in report_text
+    )
+
+    assert (
+        '"total_stations":2'
+        in report_text
     )

@@ -62,6 +62,10 @@ def main() -> None:
                     "Output:",
                     output.path,
                 )
+            print(
+                "Quality report:",
+                result.quality_report_path,
+            )
 
     finally:
         spark.stop()

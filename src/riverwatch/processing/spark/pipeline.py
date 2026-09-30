@@ -25,6 +25,28 @@ from riverwatch.processing.spark.writer import (
     ensure_processed_outputs_absent,
     write_processed_parquet,
 )
+from riverwatch.quality.model import (
+    QualityDataset,
+    QualityRunReport,
+)
+from riverwatch.quality.spark.freshness import (
+    summarize_current_data_health,
+)
+from riverwatch.quality.spark.observations import (
+    evaluate_observation_quality,
+)
+from riverwatch.quality.spark.stations import (
+    evaluate_station_quality,
+)
+from riverwatch.quality.spark.summary import (
+    summarize_dataset_quality,
+)
+from riverwatch.quality.writer import (
+    QualityReportWriter,
+)
+from riverwatch.storage.local import (
+    LocalObjectStore,
+)
 
 
 def process_manifest(
@@ -36,6 +58,12 @@ def process_manifest(
     processing_input = load_processing_input(
         lake_root=lake_root,
         manifest_path=manifest_path,
+    )
+
+    quality_writer = QualityReportWriter(
+        store=LocalObjectStore(
+            root=lake_root
+        )
     )
 
     raw_pages = read_raw_pages(
@@ -68,8 +96,38 @@ def process_manifest(
             )
         )
 
+        checked_observations = (
+            evaluate_observation_quality(
+                observations=observations,
+                endpoint=BipadEndpoint.RIVER,
+            )
+        )
+
+        observation_summary = (
+            summarize_dataset_quality(
+                dataframe=checked_observations,
+                dataset=(
+                    QualityDataset.OBSERVATIONS
+                ),
+            )
+        )
+
+        quality_report = QualityRunReport(
+            report_version=1,
+            run_id=processing_input.run_id,
+            endpoint=processing_input.endpoint,
+            captured_at=(
+                processing_input.captured_at
+            ),
+            station_summary=None,
+            observation_summary=(
+                observation_summary
+            ),
+            current_data_health=None,
+        )
+
         observation_count = (
-            observations.count()
+            observation_summary.total_rows
         )
 
         observation_path = (
@@ -93,6 +151,17 @@ def process_manifest(
                 path=observation_path,
                 row_count=observation_count,
             )
+        )
+
+        quality_object = (
+            quality_writer.write_report(
+                report=quality_report
+            )
+        )
+
+        quality_report_path = (
+            lake_root
+            / quality_object.key
         )
 
     elif (
@@ -122,10 +191,70 @@ def process_manifest(
             )
         )
 
-        station_count = stations.count()
+        checked_stations = (
+            evaluate_station_quality(
+                stations=stations
+            )
+        )
+
+        checked_observations = (
+            evaluate_observation_quality(
+                observations=observations,
+                endpoint=(
+                    BipadEndpoint.RIVER_STATIONS
+                ),
+            )
+        )
+
+        station_summary = (
+            summarize_dataset_quality(
+                dataframe=checked_stations,
+                dataset=(
+                    QualityDataset.STATIONS
+                ),
+            )
+        )
+
+        observation_summary = (
+            summarize_dataset_quality(
+                dataframe=checked_observations,
+                dataset=(
+                    QualityDataset.OBSERVATIONS
+                ),
+            )
+        )
+
+        current_data_health = (
+            summarize_current_data_health(
+                stations=stations,
+                observations=observations,
+            )
+        )
+
+        quality_report = QualityRunReport(
+            report_version=1,
+            run_id=processing_input.run_id,
+            endpoint=processing_input.endpoint,
+            captured_at=(
+                processing_input.captured_at
+            ),
+            station_summary=(
+                station_summary
+            ),
+            observation_summary=(
+                observation_summary
+            ),
+            current_data_health=(
+                current_data_health
+            ),
+        )
+
+        station_count = (
+            station_summary.total_rows
+        )
 
         observation_count = (
-            observations.count()
+            observation_summary.total_rows
         )
 
         station_path = (
@@ -175,6 +304,17 @@ def process_manifest(
             ]
         )
 
+        quality_object = (
+            quality_writer.write_report(
+                report=quality_report
+            )
+        )
+
+        quality_report_path = (
+            lake_root
+            / quality_object.key
+        )
+
     else:
         raise ValueError(
             "Unsupported processing endpoint: "
@@ -186,5 +326,8 @@ def process_manifest(
         endpoint=processing_input.endpoint,
         outputs=tuple(
             outputs
+        ),
+        quality_report_path=(
+            quality_report_path
         ),
     )

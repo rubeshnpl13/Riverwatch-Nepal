@@ -20,6 +20,7 @@ from riverwatch.storage.errors import (
 )
 from riverwatch.storage.paths import (
     build_processed_run_prefix,
+    build_quality_report_key,
     build_quarantine_record_key,
     build_raw_metadata_key,
     build_raw_page_prefix,
@@ -210,4 +211,26 @@ def test_builds_processed_run_prefix() -> None:
         "day=29/"
         "hour=03/"
         "run-run-123"
+    )
+
+def test_builds_quality_report_key() -> None:
+    captured_at = datetime.fromisoformat(
+        "2026-09-29T03:00:00+00:00"
+    )
+
+    key = build_quality_report_key(
+        endpoint=BipadEndpoint.RIVER,
+        captured_at=captured_at,
+        run_id="abc-123",
+    )
+
+    assert key == (
+        "quality/"
+        "endpoint=river/"
+        "year=2026/"
+        "month=09/"
+        "day=29/"
+        "hour=03/"
+        "run-abc-123/"
+        "report.json"
     )

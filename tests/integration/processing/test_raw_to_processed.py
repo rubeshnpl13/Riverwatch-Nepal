@@ -1,3 +1,4 @@
+import json
 from datetime import (
     UTC,
     datetime,
@@ -206,3 +207,75 @@ def test_raw_manifest_to_processed_parquet(
     } == {
         "integration-run",
     }
+
+    assert (
+        processing_result
+        .quality_report_path
+        .exists()
+    )
+
+    report = json.loads(
+        processing_result
+        .quality_report_path
+        .read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert (
+        report["report_version"]
+        == 1
+    )
+
+    assert (
+        report["run_id"]
+        == processing_result.run_id
+    )
+
+    assert (
+        report["endpoint"]
+        == processing_result.endpoint.value
+    )
+
+    assert (
+        report["observation_summary"]
+        ["total_rows"]
+        > 0
+    )
+
+    assert (
+        report["observation_summary"]
+        ["pass_rows"]
+        + report["observation_summary"]
+        ["warn_rows"]
+        + report["observation_summary"]
+        ["fail_rows"]
+        == report["observation_summary"]
+        ["total_rows"]
+    )
+
+    assert (
+        report["station_summary"]
+        is None
+    )
+
+    assert (
+        report["current_data_health"]
+        is None
+    )
+
+    for output in processing_result.outputs:
+        assert (
+            processing_result.run_id
+            in str(
+                output.path
+            )
+        )
+
+    assert (
+        processing_result.run_id
+        in str(
+            processing_result
+            .quality_report_path
+        )
+    )

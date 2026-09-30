@@ -211,3 +211,29 @@ def build_processed_run_prefix(
         f"hour={timestamp:%H}/"
         f"run-{safe_run_id}"
     )
+
+def build_quality_report_key(
+    *,
+    endpoint: BipadEndpoint,
+    captured_at: datetime,
+    run_id: str,
+) -> str:
+    safe_run_id = _validate_segment(
+        "run_id",
+        run_id,
+    )
+
+    timestamp = captured_at.astimezone(
+        UTC
+    )
+
+    return (
+        f"quality/"
+        f"endpoint={endpoint.value}/"
+        f"year={timestamp:%Y}/"
+        f"month={timestamp:%m}/"
+        f"day={timestamp:%d}/"
+        f"hour={timestamp:%H}/"
+        f"run-{safe_run_id}/"
+        f"report.json"
+    )
