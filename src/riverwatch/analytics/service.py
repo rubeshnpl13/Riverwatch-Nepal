@@ -2,6 +2,7 @@ from datetime import (
     UTC,
     datetime,
 )
+from threading import RLock
 from typing import Any
 
 from duckdb import DuckDBPyConnection
@@ -260,11 +261,12 @@ def _network_summary_from_row(
 
 class AnalyticsService:
     def __init__(
-        self,
-        *,
-        connection: DuckDBPyConnection,
+            self,
+            *,
+            connection: DuckDBPyConnection,
     ) -> None:
         self._connection = connection
+        self._connection_lock = RLock()
 
     def get_current_snapshot(
         self,
@@ -272,42 +274,41 @@ class AnalyticsService:
         CurrentRiverStation,
         ...,
     ]:
-        rows = (
-            self._connection
-            .execute(
-                """
-                SELECT
-                    station_id,
-                    station_name,
 
-                    NULLIF(
-                        TRIM(basin_name),
-                        ''
-                    ) AS basin_name,
+        with self._connection_lock:
+            rows = (
+                self._connection.execute(
+                    """
+                    SELECT station_id,
+                           station_name,
 
-                    latitude,
-                    longitude,
-                    elevation_m,
+                           NULLIF(
+                                   TRIM(basin_name),
+                                   ''
+                           ) AS basin_name,
 
-                    source_record_id,
-                    observed_at,
-                    water_level_m,
+                           latitude,
+                           longitude,
+                           elevation_m,
 
-                    observation_ingested_at,
-                    has_observation,
-                    observation_age_hours
+                           source_record_id,
+                           observed_at,
+                           water_level_m,
 
-                FROM current_river_snapshot
+                           observation_ingested_at,
+                           has_observation,
+                           observation_age_hours
 
-                ORDER BY
-                    station_name
+                    FROM current_river_snapshot
+
+                    ORDER BY station_name
                         NULLS LAST,
-                    station_id
+                             station_id
                         NULLS LAST
-                """
+                    """
+                )
+                .fetchall()
             )
-            .fetchall()
-        )
 
         return tuple(
             _current_station_from_row(
@@ -326,43 +327,38 @@ class AnalyticsService:
             )
         )
 
-        row = (
-            self._connection
-            .execute(
-                """
-                SELECT
-                    station_id,
-                    station_name,
+        with self._connection_lock:
+            row = (
+                self._connection.execute(
+                    """
+                    SELECT station_id,
+                           station_name,
 
-                    NULLIF(
-                        TRIM(basin_name),
-                        ''
-                    ) AS basin_name,
+                           NULLIF(
+                                   TRIM(basin_name),
+                                   ''
+                           ) AS basin_name,
 
-                    latitude,
-                    longitude,
-                    elevation_m,
+                           latitude,
+                           longitude,
+                           elevation_m,
 
-                    source_record_id,
-                    observed_at,
-                    water_level_m,
+                           source_record_id,
+                           observed_at,
+                           water_level_m,
 
-                    observation_ingested_at,
-                    has_observation,
-                    observation_age_hours
+                           observation_ingested_at,
+                           has_observation,
+                           observation_age_hours
 
-                FROM current_river_snapshot
+                    FROM current_river_snapshot
 
-                WHERE station_id = ?
-
-                LIMIT 1
-                """,
-                [
-                    station_id,
-                ],
+                    WHERE station_id = ? LIMIT 1
+                    """,
+                    [station_id],
+                )
+                .fetchone()
             )
-            .fetchone()
-        )
 
         if row is None:
             return None
@@ -433,35 +429,34 @@ class AnalyticsService:
             )
         )
 
-        rows = (
-            self._connection
-            .execute(
-                f"""
-                SELECT
-                    source_record_id,
-                    station_id,
-                    observed_at,
-                    water_level_m,
-                    endpoint,
-                    run_id,
-                    ingested_at
+        with self._connection_lock:
+            rows = (
+                self._connection.execute(
+                    f"""
+                                  SELECT
+                                      source_record_id,
+                                      station_id,
+                                      observed_at,
+                                      water_level_m,
+                                      endpoint,
+                                      run_id,
+                                      ingested_at
 
-                FROM
-                    station_observation_history
+                                  FROM
+                                      station_observation_history
 
-                WHERE
-                    {where_clause}
+                                  WHERE
+                                      {where_clause}
 
-                ORDER BY
-                    observed_at ASC,
-                    source_record_id ASC
-                        NULLS LAST
-                """,
-                parameters,
+                                  ORDER BY
+                                      observed_at ASC,
+                                      source_record_id ASC
+                                          NULLS LAST
+                                  """,
+                    parameters,
+                )
+                .fetchall()
             )
-            .fetchall()
-        )
-
         return tuple(
             _station_observation_from_row(
                 row
@@ -475,42 +470,40 @@ class AnalyticsService:
         BasinCurrentSummary,
         ...,
     ]:
-        rows = (
-            self._connection
-            .execute(
-                """
-                SELECT
-                    basin_name,
 
-                    total_stations,
+        with self._connection_lock:
+            rows = (
+                self._connection.execute(
+                    """
+                    SELECT basin_name,
 
-                    stations_with_observation,
-                    stations_without_observation,
+                           total_stations,
 
-                    fresh_observations,
-                    stale_observations,
-                    future_observations,
-                    unassessable_observations,
+                           stations_with_observation,
+                           stations_without_observation,
 
-                    observations_with_water_level,
-                    observations_without_water_level,
+                           fresh_observations,
+                           stale_observations,
+                           future_observations,
+                           unassessable_observations,
 
-                    coverage_ratio,
-                    freshness_ratio,
+                           observations_with_water_level,
+                           observations_without_water_level,
 
-                    oldest_observed_at,
-                    latest_observed_at
+                           coverage_ratio,
+                           freshness_ratio,
 
-                FROM basin_current_summary
+                           oldest_observed_at,
+                           latest_observed_at
 
-                ORDER BY
-                    total_stations DESC,
-                    basin_name
-                """
+                    FROM basin_current_summary
+
+                    ORDER BY total_stations DESC,
+                             basin_name
+                    """
+                )
+                .fetchall()
             )
-            .fetchall()
-        )
-
         return tuple(
             _basin_summary_from_row(
                 row
@@ -521,10 +514,11 @@ class AnalyticsService:
     def get_network_summary(
         self,
     ) -> CurrentNetworkSummary:
-        row = (
-            self._connection
-            .execute(
-                """
+
+        with self._connection_lock:
+            row = (
+                self._connection.execute(
+                     """
                 SELECT
                     basins_represented,
 
@@ -549,9 +543,9 @@ class AnalyticsService:
 
                 FROM current_network_summary
                 """
+                )
+                .fetchone()
             )
-            .fetchone()
-        )
 
         if row is None:
             raise RuntimeError(

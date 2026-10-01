@@ -7,6 +7,9 @@ from contextlib import (
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
 
 from riverwatch.analytics.catalog import (
     create_analytics_connection,
@@ -31,6 +34,11 @@ API_PREFIX = "/api/v1"
 
 DEFAULT_LAKE_ROOT = Path(
     "data/lake"
+)
+
+DEFAULT_CORS_ORIGINS = (
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
 )
 
 
@@ -66,6 +74,9 @@ async def lifespan(
 def create_app(
     *,
     lake_root: Path | None = None,
+    cors_origins: (
+        tuple[str, ...] | None
+    ) = None,
 ) -> FastAPI:
     app = FastAPI(
         title="RiverWatch API",
@@ -86,18 +97,42 @@ def create_app(
         else lake_root
     )
 
+    origins = (
+        DEFAULT_CORS_ORIGINS
+        if cors_origins is None
+        else cors_origins
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(
+            origins
+        ),
+        allow_credentials=False,
+        allow_methods=[
+            "GET",
+        ],
+        allow_headers=[
+            "Accept",
+            "Content-Type",
+        ],
+    )
+
     app.include_router(
         health_router,
         prefix=API_PREFIX,
     )
+
     app.include_router(
         stations_router,
         prefix=API_PREFIX,
     )
+
     app.include_router(
         observations_router,
         prefix=API_PREFIX,
     )
+
     app.include_router(
         summaries_router,
         prefix=API_PREFIX,

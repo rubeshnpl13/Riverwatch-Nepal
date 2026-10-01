@@ -146,3 +146,66 @@ def test_lifespan_initializes_and_closes_analytics(
         app.state.analytics_service
         is None
     )
+
+def test_cors_allows_frontend_origin(
+    monkeypatch,
+) -> None:
+    _mock_analytics_connection(
+        monkeypatch
+    )
+
+    app = create_app()
+
+    with TestClient(
+        app
+    ) as client:
+        response = client.options(
+            f"{API_PREFIX}/stations",
+            headers={
+                "Origin": (
+                    "http://localhost:5173"
+                ),
+                (
+                    "Access-Control-"
+                    "Request-Method"
+                ): "GET",
+            },
+        )
+
+    assert response.status_code == 200
+
+    assert (
+        response.headers[
+            "access-control-allow-origin"
+        ]
+        == "http://localhost:5173"
+    )
+
+
+def test_cors_rejects_unknown_origin(
+    monkeypatch,
+) -> None:
+    _mock_analytics_connection(
+        monkeypatch
+    )
+
+    app = create_app()
+
+    with TestClient(
+        app
+    ) as client:
+        response = client.get(
+            f"{API_PREFIX}/health/live",
+            headers={
+                "Origin": (
+                    "https://example.com"
+                ),
+            },
+        )
+
+    assert response.status_code == 200
+
+    assert (
+        "access-control-allow-origin"
+        not in response.headers
+    )

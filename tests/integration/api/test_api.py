@@ -1,3 +1,6 @@
+from concurrent.futures import (
+    ThreadPoolExecutor,
+)
 from pathlib import Path
 
 import duckdb
@@ -559,3 +562,59 @@ def test_api_startup_fails_without_processed_lake(
             app
         ):
             pass
+
+def test_network_summary_supports_concurrent_requests(
+    tmp_path: Path,
+) -> None:
+    lake_root = (
+        tmp_path
+        / "lake"
+    )
+
+    _write_test_lake(
+        lake_root=lake_root
+    )
+
+    app = create_app(
+        lake_root=lake_root
+    )
+
+    with TestClient(
+        app
+    ) as client:
+
+        def request_summary(
+            _: int,
+        ) -> tuple[int, int]:
+            response = client.get(
+                
+                    f"{API_PREFIX}"
+                    "/network/summary"
+                
+            )
+
+            body = response.json()
+
+            return (
+                response.status_code,
+                body[
+                    "total_stations"
+                ],
+            )
+
+        with ThreadPoolExecutor(
+            max_workers=4
+        ) as executor:
+            results = list(
+                executor.map(
+                    request_summary,
+                    range(8),
+                )
+            )
+
+    assert results == [
+        (
+            200,
+            3,
+        ),
+    ] * 8
