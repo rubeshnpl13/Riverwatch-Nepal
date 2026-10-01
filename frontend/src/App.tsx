@@ -6,18 +6,25 @@ import {
 import {
   getHealth,
 } from "./api/health";
+
 import {
   NetworkOverview,
 } from "./components/NetworkOverview";
 
-import "./App.css";
 import {
-  StationTable,
-} from "./components/StationTable";
+  StationDetail,
+} from "./components/StationDetail";
 
 import {
   StationMap,
 } from "./components/StationMap";
+
+import {
+  StationTable,
+} from "./components/StationTable";
+
+import "./App.css";
+
 
 type ApiStatus =
   | "checking"
@@ -32,6 +39,36 @@ function App() {
   ] = useState<ApiStatus>(
     "checking",
   );
+
+  const [
+    selectedStationId,
+    setSelectedStationId,
+  ] = useState<
+    string | null
+  >(null);
+
+
+  function selectStation(
+    stationId: string,
+  ) {
+    setSelectedStationId(
+      stationId,
+    );
+
+    window.requestAnimationFrame(
+      () => {
+        document
+          .getElementById(
+            "station-detail",
+          )
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+      },
+    );
+  }
+
 
   useEffect(() => {
     const controller =
@@ -69,6 +106,7 @@ function App() {
     };
   }, []);
 
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -92,23 +130,52 @@ function App() {
             aria-hidden="true"
           />
 
-          {apiStatus
-            === "checking"
-            && "Checking API"}
+          {
+            apiStatus === "checking"
+            && "Checking API"
+          }
 
-          {apiStatus
-            === "online"
-            && "API connected"}
+          {
+            apiStatus === "online"
+            && "API connected"
+          }
 
-          {apiStatus
-            === "offline"
-            && "API unavailable"}
+          {
+            apiStatus === "offline"
+            && "API unavailable"
+          }
         </div>
       </header>
 
+
       <NetworkOverview />
-      <StationMap />
-      <StationTable />
+
+
+      <StationMap
+        selectedStationId={
+          selectedStationId
+        }
+        onSelectStation={
+          selectStation
+        }
+      />
+
+
+      <StationDetail
+        stationId={
+          selectedStationId
+        }
+      />
+
+
+      <StationTable
+        selectedStationId={
+          selectedStationId
+        }
+        onSelectStation={
+          selectStation
+        }
+      />
     </main>
   );
 }

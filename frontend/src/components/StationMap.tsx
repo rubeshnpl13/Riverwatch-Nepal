@@ -29,6 +29,17 @@ const NEPAL_CENTER:
   ];
 
 
+interface StationMapProps {
+  selectedStationId:
+    string | null;
+
+  onSelectStation:
+    (
+      stationId: string,
+    ) => void;
+}
+
+
 function isValidCoordinate(
   station: CurrentRiverStation,
 ): station is CurrentRiverStation & {
@@ -190,7 +201,10 @@ function FitStationBounds({
 }
 
 
-export function StationMap() {
+export function StationMap({
+  selectedStationId,
+  onSelectStation,
+}: StationMapProps) {
   const [
     stations,
     setStations,
@@ -257,8 +271,8 @@ export function StationMap() {
         stations === null
           ? []
           : stations.filter(
-            isValidCoordinate,
-          )
+              isValidCoordinate,
+            )
       ),
       [
         stations,
@@ -377,7 +391,7 @@ export function StationMap() {
         >
           <TileLayer
             attribution={
-              '&copy; OpenStreetMap contributors'
+              "&copy; OpenStreetMap contributors"
             }
             url={
               "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -408,31 +422,36 @@ export function StationMap() {
                     station.latitude,
                     station.longitude,
                   ]}
-                  radius={6}
-                  pathOptions={
-                    station
-                      .has_observation
-                      ? {
-                        color:
-                          "#247a5c",
-                        fillColor:
-                          "#3a9272",
-                        fillOpacity:
-                          0.8,
-                        weight:
-                          1.5,
-                      }
-                      : {
-                        color:
-                          "#6f7d78",
-                        fillColor:
-                          "#9aa6a2",
-                        fillOpacity:
-                          0.8,
-                        weight:
-                          1.5,
-                      }
+                  radius={
+                    station.station_id
+                      === selectedStationId
+                      ? 9
+                      : 6
                   }
+                  pathOptions={{
+                    color:
+                      station.station_id
+                        === selectedStationId
+                        ? "#17211e"
+                        : station
+                            .has_observation
+                          ? "#247a5c"
+                          : "#6f7d78",
+
+                    fillColor:
+                      station
+                        .has_observation
+                        ? "#3a9272"
+                        : "#9aa6a2",
+
+                    fillOpacity: 0.8,
+
+                    weight:
+                      station.station_id
+                        === selectedStationId
+                        ? 3
+                        : 1.5,
+                  }}
                 >
                   <Popup>
                     <div className="station-popup">
@@ -518,6 +537,34 @@ export function StationMap() {
                           </dd>
                         </div>
                       </dl>
+
+                      <button
+                        type="button"
+                        className="popup-detail-button"
+                        disabled={
+                          station.station_id
+                          === null
+                        }
+                        onClick={
+                          () => {
+                            if (
+                              station.station_id
+                              !== null
+                            ) {
+                              onSelectStation(
+                                station.station_id,
+                              );
+                            }
+                          }
+                        }
+                      >
+                        {
+                          station.station_id
+                            === selectedStationId
+                            ? "Viewing details"
+                            : "View station details"
+                        }
+                      </button>
                     </div>
                   </Popup>
                 </CircleMarker>

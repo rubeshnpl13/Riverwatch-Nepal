@@ -39,3 +39,54 @@ export function getStations(
     signal,
   );
 }
+
+export interface StationObservation {
+  source_record_id: string | null;
+
+  station_id: string;
+
+  observed_at: string;
+
+  water_level_m: number | null;
+
+  endpoint: string;
+  run_id: string;
+
+  ingested_at: string | null;
+}
+
+
+export function getStation(
+  stationId: string,
+  signal?: AbortSignal,
+): Promise<CurrentRiverStation> {
+  return apiGet<
+    CurrentRiverStation
+  >(
+    `/stations/${
+      encodeURIComponent(
+        stationId,
+      )
+    }`,
+    signal,
+  );
+}
+
+
+export function getStationHistory(
+  stationId: string,
+  signal?: AbortSignal,
+): Promise<
+  StationObservation[]
+> {
+  return apiGet<
+    StationObservation[]
+  >(
+    `/stations/${
+      encodeURIComponent(
+        stationId,
+      )
+    }/history`,
+    signal,
+  );
+}

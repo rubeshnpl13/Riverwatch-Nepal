@@ -10,6 +10,16 @@ import {
 } from "../api/stations";
 
 
+interface StationTableProps {
+  selectedStationId:
+    string | null;
+
+  onSelectStation:
+    (
+      stationId: string,
+    ) => void;
+}
+
 const PAGE_SIZE = 20;
 
 
@@ -113,7 +123,10 @@ function formatTimestamp(
 }
 
 
-export function StationTable() {
+export function StationTable({
+  selectedStationId,
+  onSelectStation,
+}: StationTableProps) {
   const [
     stations,
     setStations,
@@ -363,18 +376,6 @@ export function StationTable() {
     );
 
 
-  // useEffect(() => {
-  //   setPage(
-  //     1,
-  //   );
-  // }, [
-  //   basin,
-  //   observationFilter,
-  //   search,
-  //   waterLevelFilter,
-  // ]);
-
-
   const totalPages =
     Math.max(
       1,
@@ -538,8 +539,9 @@ export function StationTable() {
                     .target
                     .value,
                 );
+
                 setPage(
-                    1,
+                  1,
                 );
               }
             }
@@ -563,8 +565,9 @@ export function StationTable() {
                     .target
                     .value,
                 );
+
                 setPage(
-                    1,
+                  1,
                 );
               }
             }
@@ -605,12 +608,11 @@ export function StationTable() {
                 event,
               ) => {
                 setObservationFilter(
-                  event
-                    .target
-                    .value as ObservationFilter,
+                  event.target.value as ObservationFilter,
                 );
+
                 setPage(
-                    1,
+                  1,
                 );
               }
             }
@@ -644,12 +646,11 @@ export function StationTable() {
                 event,
               ) => {
                 setWaterLevelFilter(
-                  event
-                    .target
-                    .value as WaterLevelFilter,
+                  event.target.value as WaterLevelFilter,
                 );
+
                 setPage(
-                    1,
+                  1,
                 );
               }
             }
@@ -726,6 +727,10 @@ export function StationTable() {
                         <th>
                           Observed at
                         </th>
+
+                        <th>
+                          Details
+                        </th>
                       </tr>
                     </thead>
 
@@ -748,6 +753,13 @@ export function StationTable() {
                                   startIndex
                                   + index
                                 }`
+                              }
+                              className={
+                                station
+                                  .station_id
+                                === selectedStationId
+                                  ? "station-row--selected"
+                                  : undefined
                               }
                             >
                               <td
@@ -818,6 +830,40 @@ export function StationTable() {
                                       .observed_at,
                                   )
                                 }
+                              </td>
+
+                              <td>
+                                <button
+                                  type="button"
+                                  className="station-view-button"
+                                  disabled={
+                                    station
+                                      .station_id
+                                    === null
+                                  }
+                                  onClick={
+                                    () => {
+                                      if (
+                                        station
+                                          .station_id
+                                        !== null
+                                      ) {
+                                        onSelectStation(
+                                          station
+                                            .station_id,
+                                        );
+                                      }
+                                    }
+                                  }
+                                >
+                                  {
+                                    station
+                                      .station_id
+                                    === selectedStationId
+                                      ? "Selected"
+                                      : "View"
+                                  }
+                                </button>
                               </td>
                             </tr>
                           ),
