@@ -15,6 +15,10 @@ import {
   StationTable,
 } from "./components/StationTable";
 
+import {
+  StationMap,
+} from "./components/StationMap";
+
 type ApiStatus =
   | "checking"
   | "online"
@@ -103,6 +107,7 @@ function App() {
       </header>
 
       <NetworkOverview />
+      <StationMap />
       <StationTable />
     </main>
   );

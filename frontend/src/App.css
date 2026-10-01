@@ -542,3 +542,150 @@
     justify-content: space-between;
   }
 }
+
+.map-section {
+  margin-top: 52px;
+}
+
+.map-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #dfe6e3;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 8px 30px
+    rgb(15 23 42 / 5%);
+}
+
+.station-map {
+  width: 100%;
+  height: 520px;
+  background: #edf2f0;
+}
+
+.map-legend {
+  position: absolute;
+  z-index: 500;
+  top: 14px;
+  right: 14px;
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  padding: 9px 12px;
+
+  border: 1px solid
+    rgb(210 220 216 / 90%);
+  border-radius: 10px;
+
+  background:
+    rgb(255 255 255 / 94%);
+
+  color: #43544e;
+
+  font-size: 0.78rem;
+
+  box-shadow:
+    0 4px 14px
+    rgb(15 23 42 / 8%);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.legend-dot--observation {
+  background: #3a9272;
+  border: 1px solid #247a5c;
+}
+
+.legend-dot--missing {
+  background: #9aa6a2;
+  border: 1px solid #6f7d78;
+}
+
+.map-note {
+  margin: 12px 2px 0;
+  color: #60706a;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.station-popup {
+  min-width: 210px;
+}
+
+.station-popup-title {
+  display: block;
+  margin-bottom: 10px;
+  color: #17211e;
+  font-size: 0.95rem;
+}
+
+.station-popup dl {
+  margin: 0;
+}
+
+.station-popup dl > div {
+  display: grid;
+  grid-template-columns:
+    88px
+    minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid #edf1ef;
+}
+
+.station-popup dt {
+  color: #6b7974;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.station-popup dd {
+  min-width: 0;
+  margin: 0;
+  color: #27352f;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-control-attribution {
+  font-size: 0.65rem;
+}
+
+@media (
+  max-width: 680px
+) {
+  .map-section {
+    margin-top: 40px;
+  }
+
+  .station-map {
+    height: 420px;
+  }
+
+  .map-legend {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+
+    justify-content: center;
+  }
+}
