@@ -9,7 +9,6 @@ import {
   type CurrentRiverStation,
 } from "../api/stations";
 
-
 interface StationTableProps {
   selectedStationId:
     string | null;
@@ -22,18 +21,15 @@ interface StationTableProps {
 
 const PAGE_SIZE = 20;
 
-
 type ObservationFilter =
   | "all"
   | "with"
   | "without";
 
-
 type WaterLevelFilter =
   | "all"
   | "available"
   | "missing";
-
 
 const numberFormatter =
   new Intl.NumberFormat(
@@ -42,7 +38,6 @@ const numberFormatter =
       maximumFractionDigits: 3,
     },
   );
-
 
 const timestampFormatter =
   new Intl.DateTimeFormat(
@@ -58,7 +53,6 @@ const timestampFormatter =
     },
   );
 
-
 function basinLabel(
   station: CurrentRiverStation,
 ): string {
@@ -70,7 +64,6 @@ function basinLabel(
     : "Unknown";
 }
 
-
 function stationName(
   station: CurrentRiverStation,
 ): string {
@@ -81,7 +74,6 @@ function stationName(
     ? value
     : "Unnamed station";
 }
-
 
 function formatWaterLevel(
   value: number | null,
@@ -96,7 +88,6 @@ function formatWaterLevel(
     )
   } m`;
 }
-
 
 function formatTimestamp(
   value: string | null,
@@ -121,7 +112,6 @@ function formatTimestamp(
     date,
   );
 }
-
 
 export function StationTable({
   selectedStationId,
@@ -180,7 +170,6 @@ export function StationTable({
     1,
   );
 
-
   useEffect(() => {
     const controller =
       new AbortController();
@@ -225,7 +214,6 @@ export function StationTable({
     };
   }, []);
 
-
   const basinOptions =
     useMemo(
       () => {
@@ -266,7 +254,6 @@ export function StationTable({
         stations,
       ],
     );
-
 
   const filteredStations =
     useMemo(
@@ -375,7 +362,6 @@ export function StationTable({
       ],
     );
 
-
   const totalPages =
     Math.max(
       1,
@@ -405,7 +391,6 @@ export function StationTable({
         + PAGE_SIZE,
     );
 
-
   function clearFilters() {
     setSearch(
       "",
@@ -427,7 +412,6 @@ export function StationTable({
       1,
     );
   }
-
 
   if (hasError) {
     return (
@@ -458,7 +442,6 @@ export function StationTable({
     );
   }
 
-
   if (stations === null) {
     return (
       <section
@@ -476,7 +459,6 @@ export function StationTable({
       </section>
     );
   }
-
 
   return (
     <section
@@ -515,7 +497,6 @@ export function StationTable({
         </p>
       </div>
 
-
       <div className="station-toolbar">
         <label
           className="station-filter station-search"
@@ -547,7 +528,6 @@ export function StationTable({
             }
           />
         </label>
-
 
         <label className="station-filter">
           <span>
@@ -593,7 +573,6 @@ export function StationTable({
           </select>
         </label>
 
-
         <label className="station-filter">
           <span>
             Observation
@@ -608,7 +587,9 @@ export function StationTable({
                 event,
               ) => {
                 setObservationFilter(
-                  event.target.value as ObservationFilter,
+                  event
+                    .target
+                    .value as ObservationFilter,
                 );
 
                 setPage(
@@ -631,7 +612,6 @@ export function StationTable({
           </select>
         </label>
 
-
         <label className="station-filter">
           <span>
             Water level
@@ -646,7 +626,9 @@ export function StationTable({
                 event,
               ) => {
                 setWaterLevelFilter(
-                  event.target.value as WaterLevelFilter,
+                  event
+                    .target
+                    .value as WaterLevelFilter,
                 );
 
                 setPage(
@@ -669,7 +651,6 @@ export function StationTable({
           </select>
         </label>
 
-
         <button
           className="clear-filters"
           type="button"
@@ -680,7 +661,6 @@ export function StationTable({
           Clear filters
         </button>
       </div>
-
 
       <div className="station-table-card">
         {
@@ -836,6 +816,11 @@ export function StationTable({
                                 <button
                                   type="button"
                                   className="station-view-button"
+                                  aria-pressed={
+                                    station
+                                      .station_id
+                                    === selectedStationId
+                                  }
                                   disabled={
                                     station
                                       .station_id
@@ -872,7 +857,6 @@ export function StationTable({
                     </tbody>
                   </table>
                 </div>
-
 
                 <div className="table-pagination">
                   <p>

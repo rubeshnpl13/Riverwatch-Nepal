@@ -541,6 +541,10 @@ export function StationMap({
                       <button
                         type="button"
                         className="popup-detail-button"
+                        aria-pressed={
+                          station.station_id
+                          === selectedStationId
+                        }
                         disabled={
                           station.station_id
                           === null
