@@ -2,6 +2,13 @@ from riverwatch.events.bus import (
     EventPublisher,
     EventQueue,
 )
+from riverwatch.events.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyRecordError,
+    IngestionExecutionRecord,
+    IngestionExecutionStore,
+    LocalIngestionExecutionStore,
+)
 from riverwatch.events.ingestion import (
     IngestionRequestPublisher,
 )
@@ -28,4 +35,9 @@ __all__ = [
     "IngestionRunner",
     "IngestionRunReference",
     "IngestionWorker",
+    "IdempotencyConflictError",
+    "IdempotencyRecordError",
+    "IngestionExecutionRecord",
+    "IngestionExecutionStore",
+    "LocalIngestionExecutionStore",
 ]

@@ -7,6 +7,10 @@ from uuid import UUID
 
 import pytest
 
+from riverwatch.events.idempotency import (
+    IngestionExecutionRecord,
+    LocalIngestionExecutionStore,
+)
 from riverwatch.events.local import (
     LocalEventBus,
 )
@@ -31,6 +35,7 @@ CORRELATION_ID = UUID(
     "33333333-3333-3333-3333-333333333333"
 )
 
+
 REQUEST_TIME = datetime(
     2026,
     10,
@@ -39,6 +44,7 @@ REQUEST_TIME = datetime(
     0,
     tzinfo=UTC,
 )
+
 
 COMPLETED_TIME = datetime(
     2026,
@@ -58,7 +64,11 @@ class RecordingRunner:
         self._result = result
 
         self.calls: list[
-            tuple[str, str]
+            tuple[
+                str,
+                str,
+                UUID,
+            ]
         ] = []
 
     def run(
@@ -66,11 +76,13 @@ class RecordingRunner:
         *,
         provider: str,
         endpoint: str,
+        idempotency_key: UUID,
     ) -> IngestionRunReference:
         self.calls.append(
             (
                 provider,
                 endpoint,
+                idempotency_key,
             )
         )
 
@@ -83,6 +95,7 @@ class FailingRunner:
         *,
         provider: str,
         endpoint: str,
+        idempotency_key: UUID,
     ) -> IngestionRunReference:
         raise RuntimeError(
             "ingestion failed"
@@ -101,11 +114,8 @@ def make_request_event() -> EventEnvelope:
             CORRELATION_ID
         ),
         data={
-            "provider":
-                "bipad",
-
-            "endpoint":
-                "river-stations",
+            "provider": "bipad",
+            "endpoint": "river-stations",
         },
     )
 
@@ -117,9 +127,7 @@ def test_worker_processes_ingestion_request(
         events_root=tmp_path,
     )
 
-    request = (
-        make_request_event()
-    )
+    request = make_request_event()
 
     queue.publish(
         request
@@ -138,29 +146,28 @@ def test_worker_processes_ingestion_request(
     worker = IngestionWorker(
         queue=queue,
         runner=runner,
-        clock=lambda: (
-            COMPLETED_TIME
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
         ),
+        clock=lambda: COMPLETED_TIME,
         uuid_factory=lambda: (
             COMPLETED_EVENT_ID
         ),
     )
 
-    processed = (
-        worker.run_once()
-    )
+    processed = worker.run_once()
 
     assert processed == 1
 
-    assert (
-        runner.calls
-        == [
-            (
-                "bipad",
-                "river-stations",
-            )
-        ]
-    )
+    assert runner.calls == [
+        (
+            "bipad",
+            "river-stations",
+            REQUEST_EVENT_ID,
+        )
+    ]
 
 
 def test_worker_publishes_completed_event(
@@ -186,9 +193,12 @@ def test_worker_publishes_completed_event(
                 ),
             )
         ),
-        clock=lambda: (
-            COMPLETED_TIME
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
         ),
+        clock=lambda: COMPLETED_TIME,
         uuid_factory=lambda: (
             COMPLETED_EVENT_ID
         ),
@@ -196,13 +206,9 @@ def test_worker_publishes_completed_event(
 
     worker.run_once()
 
-    pending = (
-        queue.list_pending()
-    )
+    pending = queue.list_pending()
 
-    assert len(
-        pending
-    ) == 1
+    assert len(pending) == 1
 
     completed = pending[0]
 
@@ -228,30 +234,19 @@ def test_worker_publishes_completed_event(
     )
 
     assert (
-        dict(
-            completed.data
-        )
+        dict(completed.data)
         == {
-            "provider":
-                "bipad",
-
-            "endpoint":
-                "river-stations",
-
-            "run_id":
-                "run-123",
-
-            "manifest_path":
-                (
-                    "manifests/"
-                    "run-123/"
-                    "manifest.json"
-                ),
-
-            "request_event_id":
-                str(
-                    REQUEST_EVENT_ID
-                ),
+            "provider": "bipad",
+            "endpoint": "river-stations",
+            "run_id": "run-123",
+            "manifest_path": (
+                "manifests/"
+                "run-123/"
+                "manifest.json"
+            ),
+            "request_event_id": str(
+                REQUEST_EVENT_ID
+            ),
         }
     )
 
@@ -277,6 +272,11 @@ def test_worker_marks_request_processed(
                 ),
             )
         ),
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
         uuid_factory=lambda: (
             COMPLETED_EVENT_ID
         ),
@@ -287,15 +287,10 @@ def test_worker_marks_request_processed(
     processed_path = (
         tmp_path
         / "processed"
-        / (
-            f"{REQUEST_EVENT_ID}"
-            ".json"
-        )
+        / f"{REQUEST_EVENT_ID}.json"
     )
 
-    assert (
-        processed_path.is_file()
-    )
+    assert processed_path.is_file()
 
 
 def test_worker_leaves_request_pending_when_runner_fails(
@@ -312,6 +307,11 @@ def test_worker_leaves_request_pending_when_runner_fails(
     worker = IngestionWorker(
         queue=queue,
         runner=FailingRunner(),
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
     )
 
     with pytest.raises(
@@ -320,13 +320,9 @@ def test_worker_leaves_request_pending_when_runner_fails(
     ):
         worker.run_once()
 
-    pending = (
-        queue.list_pending()
-    )
+    pending = queue.list_pending()
 
-    assert len(
-        pending
-    ) == 1
+    assert len(pending) == 1
 
     assert (
         pending[0].event_id
@@ -342,31 +338,18 @@ def test_worker_ignores_non_request_events(
     )
 
     completed = EventEnvelope(
-        event_id=(
-            COMPLETED_EVENT_ID
-        ),
+        event_id=COMPLETED_EVENT_ID,
         event_type=(
             EventType
             .INGESTION_COMPLETED
         ),
-        occurred_at=(
-            COMPLETED_TIME
-        ),
-        correlation_id=(
-            CORRELATION_ID
-        ),
+        occurred_at=COMPLETED_TIME,
+        correlation_id=CORRELATION_ID,
         data={
-            "provider":
-                "bipad",
-
-            "endpoint":
-                "river-stations",
-
-            "run_id":
-                "run-123",
-
-            "manifest_path":
-                "manifest.json",
+            "provider": "bipad",
+            "endpoint": "river-stations",
+            "run_id": "run-123",
+            "manifest_path": "manifest.json",
         },
     )
 
@@ -384,23 +367,26 @@ def test_worker_ignores_non_request_events(
     worker = IngestionWorker(
         queue=queue,
         runner=runner,
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
     )
 
-    assert (
-        worker.run_once()
-        == 0
-    )
+    assert worker.run_once() == 0
 
     assert runner.calls == []
 
     assert (
         queue.list_pending()
-        == [
-            completed
-        ]
+        == [completed]
     )
 
-#validation tests for the run reference
+
+# Validation tests for the run reference
+
+
 def test_run_reference_rejects_blank_run_id() -> None:
     with pytest.raises(
         ValueError,
@@ -410,9 +396,7 @@ def test_run_reference_rejects_blank_run_id() -> None:
     ):
         IngestionRunReference(
             run_id="   ",
-            manifest_path=(
-                "manifest.json"
-            ),
+            manifest_path="manifest.json",
         )
 
 
@@ -427,3 +411,220 @@ def test_run_reference_rejects_blank_manifest_path() -> None:
             run_id="run-123",
             manifest_path="   ",
         )
+
+
+def test_worker_does_not_rerun_completed_request(
+    tmp_path: Path,
+) -> None:
+    queue = LocalEventBus(
+        events_root=tmp_path,
+    )
+
+    request = make_request_event()
+
+    queue.publish(
+        request
+    )
+
+    execution_store = (
+        LocalIngestionExecutionStore(
+            events_root=tmp_path,
+        )
+    )
+
+    execution_store.save(
+        IngestionExecutionRecord(
+            request_event_id=REQUEST_EVENT_ID,
+            completion_event_id=(
+                COMPLETED_EVENT_ID
+            ),
+            correlation_id=CORRELATION_ID,
+            provider="bipad",
+            endpoint="river-stations",
+            run_id="run-123",
+            manifest_path="manifest.json",
+            occurred_at=COMPLETED_TIME,
+        )
+    )
+
+    runner = RecordingRunner(
+        IngestionRunReference(
+            run_id="should-not-run",
+            manifest_path="should-not-run",
+        )
+    )
+
+    worker = IngestionWorker(
+        queue=queue,
+        runner=runner,
+        execution_store=execution_store,
+    )
+
+    assert worker.run_once() == 1
+
+    assert runner.calls == []
+
+    pending = queue.list_pending()
+
+    assert len(pending) == 1
+
+    assert (
+        pending[0].event_id
+        == COMPLETED_EVENT_ID
+    )
+
+    assert (
+        pending[0].event_type
+        == EventType
+        .INGESTION_COMPLETED
+    )
+
+    processed_path = (
+        tmp_path
+        / "processed"
+        / f"{REQUEST_EVENT_ID}.json"
+    )
+
+    assert processed_path.is_file()
+
+
+class FailCompletionPublishOnceQueue:
+    def __init__(
+        self,
+        delegate: LocalEventBus,
+    ) -> None:
+        self._delegate = delegate
+        self._failed = False
+
+    def publish(
+        self,
+        event: EventEnvelope,
+    ) -> None:
+        if (
+            event.event_type
+            == EventType
+            .INGESTION_COMPLETED
+            and not self._failed
+        ):
+            self._failed = True
+
+            raise RuntimeError(
+                "completion publish failed"
+            )
+
+        self._delegate.publish(
+            event
+        )
+
+    def list_pending(
+        self,
+    ) -> list[EventEnvelope]:
+        return (
+            self._delegate
+            .list_pending()
+        )
+
+    def mark_processed(
+        self,
+        event_id: UUID,
+    ) -> None:
+        self._delegate.mark_processed(
+            event_id
+        )
+
+
+def test_worker_recovers_after_completion_publish_failure(
+    tmp_path: Path,
+) -> None:
+    local_queue = LocalEventBus(
+        events_root=tmp_path,
+    )
+
+    local_queue.publish(
+        make_request_event()
+    )
+
+    queue = (
+        FailCompletionPublishOnceQueue(
+            local_queue
+        )
+    )
+
+    execution_store = (
+        LocalIngestionExecutionStore(
+            events_root=tmp_path,
+        )
+    )
+
+    runner = RecordingRunner(
+        IngestionRunReference(
+            run_id="run-123",
+            manifest_path="manifest.json",
+        )
+    )
+
+    worker = IngestionWorker(
+        queue=queue,
+        runner=runner,
+        execution_store=execution_store,
+        clock=lambda: COMPLETED_TIME,
+        uuid_factory=lambda: (
+            COMPLETED_EVENT_ID
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "completion publish failed"
+        ),
+    ):
+        worker.run_once()
+
+    assert runner.calls == [
+        (
+            "bipad",
+            "river-stations",
+            REQUEST_EVENT_ID,
+        )
+    ]
+
+    assert (
+        execution_store.get(
+            REQUEST_EVENT_ID
+        )
+        is not None
+    )
+
+    assert (
+        local_queue.list_pending()[0]
+        .event_id
+        == REQUEST_EVENT_ID
+    )
+
+    assert worker.run_once() == 1
+
+    # Critically, ingestion was NOT
+    # executed a second time.
+    assert runner.calls == [
+        (
+            "bipad",
+            "river-stations",
+            REQUEST_EVENT_ID,
+        )
+    ]
+
+    pending = local_queue.list_pending()
+
+    assert len(pending) == 1
+
+    assert (
+        pending[0].event_id
+        == COMPLETED_EVENT_ID
+    )
+
+    assert (
+        pending[0].event_type
+        == EventType
+        .INGESTION_COMPLETED
+    )
