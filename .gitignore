@@ -54,3 +54,6 @@ data/inspection/
 # Local RiverWatch data lake
 data/lake/
 
+# Local RiverWatch events
+data/events/
+
