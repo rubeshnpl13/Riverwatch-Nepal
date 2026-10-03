@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,6 +18,13 @@ from riverwatch.events.idempotency import (
 from riverwatch.events.model import (
     EventEnvelope,
     EventType,
+)
+from riverwatch.events.retry import (
+    IngestionRetryStore,
+    RetryPolicy,
+)
+from riverwatch.observability.logging import (
+    log_event,
 )
 
 Clock = Callable[[], datetime]
@@ -68,26 +76,44 @@ class IngestionRunner(
 
 class IngestionWorker:
     def __init__(
-        self,
-        *,
-        queue: EventQueue,
-        runner: IngestionRunner,
-        execution_store: (
-            IngestionExecutionStore
-        ),
-        clock: Clock = utc_now,
-        uuid_factory: UUIDFactory = uuid4,
+            self,
+            *,
+            queue: EventQueue,
+            runner: IngestionRunner,
+            execution_store: (
+                    IngestionExecutionStore
+            ),
+            retry_store: IngestionRetryStore,
+            retry_policy: RetryPolicy | None = None,
+            clock: Clock = utc_now,
+            uuid_factory: UUIDFactory = uuid4,
+            logger: logging.Logger | None = None,
     ) -> None:
         self._queue = queue
         self._runner = runner
         self._execution_store = (
             execution_store
         )
+        self._retry_store = (
+            retry_store
+        )
+        self._retry_policy = (
+            retry_policy
+            if retry_policy is not None
+            else RetryPolicy()
+        )
         self._clock = clock
         self._uuid_factory = uuid_factory
+        self._logger = (
+            logger
+            if logger is not None
+            else logging.getLogger(
+                "riverwatch.events.ingestion_worker"
+            )
+        )
 
     def run_once(
-        self,
+            self,
     ) -> int:
         pending_events = (
             self._queue.list_pending()
@@ -97,14 +123,27 @@ class IngestionWorker:
 
         for event in pending_events:
             if (
-                event.event_type
-                != EventType
-                .INGESTION_REQUESTED
+                    event.event_type
+                    != EventType
+                    .INGESTION_REQUESTED
             ):
                 continue
 
-            self._process_request(
-                event
+            try:
+                self._process_request(
+                    event
+                )
+
+            except Exception as exc:
+                self._handle_failure(
+                    event=event,
+                    error=exc,
+                )
+
+                continue
+
+            self._retry_store.clear(
+                event.event_id
             )
 
             processed_count += 1
@@ -124,6 +163,19 @@ class IngestionWorker:
             event,
             "endpoint",
         )
+        log_event(
+            self._logger,
+            logging.INFO,
+            "ingestion_request_started",
+            event_id=str(
+                event.event_id
+            ),
+            correlation_id=str(
+                event.correlation_id
+            ),
+            provider=provider,
+            endpoint=endpoint,
+        )
 
         existing = (
             self._execution_store.get(
@@ -137,6 +189,27 @@ class IngestionWorker:
                 request=event,
                 provider=provider,
                 endpoint=endpoint,
+            )
+            log_event(
+                self._logger,
+                logging.INFO,
+                "ingestion_request_replayed",
+                event_id=str(
+                    event.event_id
+                ),
+                correlation_id=str(
+                    event.correlation_id
+                ),
+                completion_event_id=str(
+                    existing
+                    .completion_event_id
+                ),
+                provider=provider,
+                endpoint=endpoint,
+                run_id=existing.run_id,
+                manifest_path=(
+                    existing.manifest_path
+                ),
             )
 
             self._complete_from_record(
@@ -200,6 +273,26 @@ class IngestionWorker:
 
         self._queue.mark_processed(
             request.event_id
+        )
+        log_event(
+            self._logger,
+            logging.INFO,
+            "ingestion_request_completed",
+            event_id=str(
+                request.event_id
+            ),
+            correlation_id=str(
+                request.correlation_id
+            ),
+            completion_event_id=str(
+                record.completion_event_id
+            ),
+            provider=record.provider,
+            endpoint=record.endpoint,
+            run_id=record.run_id,
+            manifest_path=(
+                record.manifest_path
+            ),
         )
 
     @staticmethod
@@ -285,3 +378,79 @@ class IngestionWorker:
             )
 
         return normalized
+
+    def _handle_failure(
+            self,
+            *,
+            event: EventEnvelope,
+            error: Exception,
+    ) -> None:
+        error_message = str(
+            error
+        )
+
+        if not error_message:
+            error_message = (
+                error.__class__.__name__
+            )
+
+        state = (
+            self._retry_store
+            .record_failure(
+                request_event_id=(
+                    event.event_id
+                ),
+                failed_at=(
+                    self._clock()
+                ),
+                error_type=(
+                    error
+                    .__class__
+                    .__name__
+                ),
+                error_message=(
+                    error_message
+                ),
+            )
+        )
+
+        dead_lettered = (
+                state.attempts
+                >= self._retry_policy.max_attempts
+        )
+
+        if dead_lettered:
+            self._queue.mark_failed(
+                event.event_id
+            )
+
+        log_event(
+            self._logger,
+            logging.WARNING,
+            "ingestion_request_failed",
+            event_id=str(
+                event.event_id
+            ),
+            correlation_id=str(
+                event.correlation_id
+            ),
+            provider=event.data.get(
+                "provider"
+            ),
+            endpoint=event.data.get(
+                "endpoint"
+            ),
+            attempt=state.attempts,
+            max_attempts=(
+                self._retry_policy.max_attempts
+            ),
+            dead_lettered=dead_lettered,
+            error_type=(
+                error
+                .__class__
+                .__name__
+            ),
+            error_message=(
+                error_message
+            ),
+        )

@@ -76,17 +76,17 @@ class RiverStationIngestionService:
         )
         self._now = now
 
-
-
     def run(
-        self,
-        *,
-        max_pages: int = 100,
+            self,
+            *,
+            max_pages: int = 100,
+            run_id: str | None = None,
     ) -> RiverStationIngestionBatch:
         tracker = IngestionRunTracker(
             endpoint=(
                 BipadEndpoint.RIVER_STATIONS
-            )
+            ),
+            run_id=run_id,
         )
 
         # One ingestion timestamp for the entire batch.

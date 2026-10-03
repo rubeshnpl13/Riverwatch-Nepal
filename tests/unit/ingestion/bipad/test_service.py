@@ -134,6 +134,51 @@ def test_ingests_station_snapshot() -> None:
         == 1
     )
 
+# Test externally supplied run ID
+@respx.mock
+def test_ingestion_honors_supplied_run_id() -> None:
+    url = (
+        "https://bipadportal.gov.np/"
+        "api/v1/river-stations/"
+    )
+
+    station_payload = (
+        load_station_fixture()
+    )
+
+    respx.get(url).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "next": None,
+                "results": [
+                    station_payload,
+                ],
+            },
+        )
+    )
+
+    logger = logging.getLogger(
+        "riverwatch.test.ingestion"
+    )
+
+    with create_client() as client:
+        service = (
+            RiverStationIngestionService(
+                client=client,
+                logger=logger,
+            )
+        )
+
+        batch = service.run(
+            run_id="event-test-attempt-0001",
+        )
+
+    assert (
+        batch.run_result.run_id
+        == "event-test-attempt-0001"
+    )
+
 #Test station without observation
 @respx.mock
 def test_station_without_observation_is_counted() -> None:

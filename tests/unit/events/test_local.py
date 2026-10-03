@@ -1,8 +1,10 @@
 from datetime import (
     UTC,
     datetime,
+    timedelta,
 )
-from uuid import uuid4
+from pathlib import Path
+from uuid import UUID, uuid4
 
 from riverwatch.events.local import (
     LocalEventBus,
@@ -195,3 +197,56 @@ def test_mark_processed_moves_event(
 
     assert not pending_path.exists()
     assert processed_path.exists()
+
+#test mark failed
+def test_mark_failed_moves_event(
+    tmp_path: Path,
+) -> None:
+    bus = LocalEventBus(
+        events_root=tmp_path,
+    )
+
+    event = make_event()
+
+    bus.publish(
+        event
+    )
+
+    bus.mark_failed(
+        event.event_id
+    )
+
+    assert not (
+        tmp_path
+        / "pending"
+        / f"{event.event_id}.json"
+    ).exists()
+
+    assert (
+        tmp_path
+        / "failed"
+        / f"{event.event_id}.json"
+    ).is_file()
+
+#retry-store tests
+
+
+REQUEST_EVENT_ID = UUID(
+    "11111111-1111-1111-1111-111111111111"
+)
+
+FIRST_FAILURE = datetime(
+    2026,
+    10,
+    3,
+    0,
+    0,
+    tzinfo=UTC,
+)
+
+SECOND_FAILURE = (
+    FIRST_FAILURE
+    + timedelta(
+        minutes=1
+    )
+)

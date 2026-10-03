@@ -224,3 +224,37 @@ class LocalEventBus:
             ),
             data=data_value,
         )
+
+    def mark_failed(
+            self,
+            event_id: UUID,
+    ) -> None:
+        source = (
+                self.events_root
+                / "pending"
+                / f"{event_id}.json"
+        )
+
+        destination = (
+                self.events_root
+                / "failed"
+                / f"{event_id}.json"
+        )
+
+        destination.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        if destination.is_file():
+            if not source.exists():
+                return
+
+            raise FileExistsError(
+                "Failed event already exists: "
+                f"{destination}"
+            )
+
+        source.replace(
+            destination
+        )

@@ -54,15 +54,21 @@ def process_manifest(
     spark: SparkSession,
     lake_root: Path,
     manifest_path: Path,
+    output_root: Path | None = None,
 ) -> ProcessingRunResult:
     processing_input = load_processing_input(
         lake_root=lake_root,
         manifest_path=manifest_path,
     )
+    target_root = (
+        output_root
+        if output_root is not None
+        else lake_root
+    )
 
     quality_writer = QualityReportWriter(
         store=LocalObjectStore(
-            root=lake_root
+            root=target_root
         )
     )
 
@@ -80,7 +86,7 @@ def process_manifest(
         is BipadEndpoint.RIVER
     ):
         ensure_processed_outputs_absent(
-            lake_root=lake_root,
+            lake_root=target_root,
             datasets=[
                 ProcessedDataset.OBSERVATIONS,
             ],
@@ -133,7 +139,7 @@ def process_manifest(
         observation_path = (
             write_processed_parquet(
                 dataframe=observations,
-                lake_root=lake_root,
+                lake_root=target_root,
                 dataset=(
                     ProcessedDataset.OBSERVATIONS
                 ),
@@ -160,7 +166,7 @@ def process_manifest(
         )
 
         quality_report_path = (
-            lake_root
+            target_root
             / quality_object.key
         )
 
@@ -169,7 +175,7 @@ def process_manifest(
         is BipadEndpoint.RIVER_STATIONS
     ):
         ensure_processed_outputs_absent(
-            lake_root=lake_root,
+            lake_root=target_root,
             datasets=[
                 ProcessedDataset.STATIONS,
                 ProcessedDataset.OBSERVATIONS,
@@ -260,7 +266,7 @@ def process_manifest(
         station_path = (
             write_processed_parquet(
                 dataframe=stations,
-                lake_root=lake_root,
+                lake_root=target_root,
                 dataset=(
                     ProcessedDataset.STATIONS
                 ),
@@ -273,7 +279,7 @@ def process_manifest(
         observation_path = (
             write_processed_parquet(
                 dataframe=observations,
-                lake_root=lake_root,
+                lake_root=target_root,
                 dataset=(
                     ProcessedDataset.OBSERVATIONS
                 ),
@@ -311,7 +317,7 @@ def process_manifest(
         )
 
         quality_report_path = (
-            lake_root
+            target_root
             / quality_object.key
         )
 

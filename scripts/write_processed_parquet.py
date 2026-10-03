@@ -6,8 +6,8 @@ from riverwatch.ingestion.bipad.endpoints import (
 from riverwatch.processing.discovery import (
     find_latest_manifest,
 )
-from riverwatch.processing.spark.pipeline import (
-    process_manifest,
+from riverwatch.processing.spark.recovery import (
+    process_manifest_retry_safe,
 )
 from riverwatch.processing.spark.session import (
     create_local_spark_session,
@@ -35,7 +35,7 @@ def main() -> None:
                 )
             )
 
-            result = process_manifest(
+            result = process_manifest_retry_safe(
                 spark=spark,
                 lake_root=lake_root,
                 manifest_path=manifest_path,

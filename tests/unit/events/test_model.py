@@ -32,6 +32,10 @@ def test_event_type_values_are_stable() -> None:
         EventType.INGESTION_COMPLETED.value
         == "ingestion.completed"
     )
+    assert (
+            EventType.PROCESSING_COMPLETED.value
+            == "processing.completed"
+    )
 
 
 def test_event_normalizes_timestamp_to_utc() -> None:

@@ -1,11 +1,19 @@
 from pathlib import Path
 
+from riverwatch.events.commands import (
+    request_ingestion_main,
+)
 from riverwatch.events.ingestion import (
     IngestionRequestPublisher,
 )
 from riverwatch.events.local import (
     LocalEventBus,
 )
+
+if __name__ == "__main__":
+    raise SystemExit(
+        request_ingestion_main()
+    )
 
 EVENT_ROOT = Path(
     "data/events"

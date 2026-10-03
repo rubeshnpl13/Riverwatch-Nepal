@@ -35,3 +35,10 @@ class EventQueue(
     ) -> None:
         """Move an event to processed."""
         ...
+
+    def mark_failed(
+        self,
+        event_id: UUID,
+    ) -> None:
+        """Move an event to the dead-letter queue."""
+        ...

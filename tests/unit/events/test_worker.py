@@ -1,7 +1,10 @@
+import json
+import logging
 from datetime import (
     UTC,
     datetime,
 )
+from io import StringIO
 from pathlib import Path
 from uuid import UUID
 
@@ -18,9 +21,16 @@ from riverwatch.events.model import (
     EventEnvelope,
     EventType,
 )
+from riverwatch.events.retry import (
+    LocalIngestionRetryStore,
+    RetryPolicy,
+)
 from riverwatch.events.worker import (
     IngestionRunReference,
     IngestionWorker,
+)
+from riverwatch.observability.logging import (
+    configure_logging,
 )
 
 REQUEST_EVENT_ID = UUID(
@@ -110,9 +120,7 @@ def make_request_event() -> EventEnvelope:
             .INGESTION_REQUESTED
         ),
         occurred_at=REQUEST_TIME,
-        correlation_id=(
-            CORRELATION_ID
-        ),
+        correlation_id=CORRELATION_ID,
         data={
             "provider": "bipad",
             "endpoint": "river-stations",
@@ -148,6 +156,11 @@ def test_worker_processes_ingestion_request(
         runner=runner,
         execution_store=(
             LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=(
+            LocalIngestionRetryStore(
                 events_root=tmp_path,
             )
         ),
@@ -195,6 +208,11 @@ def test_worker_publishes_completed_event(
         ),
         execution_store=(
             LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=(
+            LocalIngestionRetryStore(
                 events_root=tmp_path,
             )
         ),
@@ -267,13 +285,16 @@ def test_worker_marks_request_processed(
         runner=RecordingRunner(
             IngestionRunReference(
                 run_id="run-123",
-                manifest_path=(
-                    "manifest.json"
-                ),
+                manifest_path="manifest.json",
             )
         ),
         execution_store=(
             LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=(
+            LocalIngestionRetryStore(
                 events_root=tmp_path,
             )
         ),
@@ -293,7 +314,7 @@ def test_worker_marks_request_processed(
     assert processed_path.is_file()
 
 
-def test_worker_leaves_request_pending_when_runner_fails(
+def test_worker_records_retry_when_runner_fails(
     tmp_path: Path,
 ) -> None:
     queue = LocalEventBus(
@@ -304,6 +325,12 @@ def test_worker_leaves_request_pending_when_runner_fails(
         make_request_event()
     )
 
+    retry_store = (
+        LocalIngestionRetryStore(
+            events_root=tmp_path,
+        )
+    )
+
     worker = IngestionWorker(
         queue=queue,
         runner=FailingRunner(),
@@ -312,13 +339,11 @@ def test_worker_leaves_request_pending_when_runner_fails(
                 events_root=tmp_path,
             )
         ),
+        retry_store=retry_store,
+        clock=lambda: COMPLETED_TIME,
     )
 
-    with pytest.raises(
-        RuntimeError,
-        match="ingestion failed",
-    ):
-        worker.run_once()
+    assert worker.run_once() == 0
 
     pending = queue.list_pending()
 
@@ -327,6 +352,24 @@ def test_worker_leaves_request_pending_when_runner_fails(
     assert (
         pending[0].event_id
         == REQUEST_EVENT_ID
+    )
+
+    state = retry_store.get(
+        REQUEST_EVENT_ID
+    )
+
+    assert state is not None
+
+    assert state.attempts == 1
+
+    assert (
+        state.last_error_type
+        == "RuntimeError"
+    )
+
+    assert (
+        state.last_error_message
+        == "ingestion failed"
     )
 
 
@@ -369,6 +412,11 @@ def test_worker_ignores_non_request_events(
         runner=runner,
         execution_store=(
             LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=(
+            LocalIngestionRetryStore(
                 events_root=tmp_path,
             )
         ),
@@ -458,6 +506,11 @@ def test_worker_does_not_rerun_completed_request(
         queue=queue,
         runner=runner,
         execution_store=execution_store,
+        retry_store=(
+            LocalIngestionRetryStore(
+                events_root=tmp_path,
+            )
+        ),
     )
 
     assert worker.run_once() == 1
@@ -532,6 +585,14 @@ class FailCompletionPublishOnceQueue:
             event_id
         )
 
+    def mark_failed(
+        self,
+        event_id: UUID,
+    ) -> None:
+        self._delegate.mark_failed(
+            event_id
+        )
+
 
 def test_worker_recovers_after_completion_publish_failure(
     tmp_path: Path,
@@ -556,6 +617,12 @@ def test_worker_recovers_after_completion_publish_failure(
         )
     )
 
+    retry_store = (
+        LocalIngestionRetryStore(
+            events_root=tmp_path,
+        )
+    )
+
     runner = RecordingRunner(
         IngestionRunReference(
             run_id="run-123",
@@ -567,19 +634,14 @@ def test_worker_recovers_after_completion_publish_failure(
         queue=queue,
         runner=runner,
         execution_store=execution_store,
+        retry_store=retry_store,
         clock=lambda: COMPLETED_TIME,
         uuid_factory=lambda: (
             COMPLETED_EVENT_ID
         ),
     )
 
-    with pytest.raises(
-        RuntimeError,
-        match=(
-            "completion publish failed"
-        ),
-    ):
-        worker.run_once()
+    assert worker.run_once() == 0
 
     assert runner.calls == [
         (
@@ -595,6 +657,14 @@ def test_worker_recovers_after_completion_publish_failure(
         )
         is not None
     )
+
+    retry_state = retry_store.get(
+        REQUEST_EVENT_ID
+    )
+
+    assert retry_state is not None
+
+    assert retry_state.attempts == 1
 
     assert (
         local_queue.list_pending()[0]
@@ -627,4 +697,236 @@ def test_worker_recovers_after_completion_publish_failure(
         pending[0].event_type
         == EventType
         .INGESTION_COMPLETED
+    )
+
+    assert (
+        retry_store.get(
+            REQUEST_EVENT_ID
+        )
+        is None
+    )
+
+
+# Add dead-letter test
+
+
+def test_worker_dead_letters_request_after_max_attempts(
+    tmp_path: Path,
+) -> None:
+    queue = LocalEventBus(
+        events_root=tmp_path,
+    )
+
+    queue.publish(
+        make_request_event()
+    )
+
+    retry_store = (
+        LocalIngestionRetryStore(
+            events_root=tmp_path,
+        )
+    )
+
+    worker = IngestionWorker(
+        queue=queue,
+        runner=FailingRunner(),
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=retry_store,
+        retry_policy=(
+            RetryPolicy(
+                max_attempts=3,
+            )
+        ),
+        clock=lambda: (
+            COMPLETED_TIME
+        ),
+    )
+
+    assert worker.run_once() == 0
+    assert worker.run_once() == 0
+    assert worker.run_once() == 0
+
+    assert (
+        queue.list_pending()
+        == []
+    )
+
+    failed_path = (
+        tmp_path
+        / "failed"
+        / (
+            f"{REQUEST_EVENT_ID}"
+            ".json"
+        )
+    )
+
+    assert failed_path.is_file()
+
+    state = retry_store.get(
+        REQUEST_EVENT_ID
+    )
+
+    assert state is not None
+
+    assert state.attempts == 3
+
+    assert (
+        state.last_error_type
+        == "RuntimeError"
+    )
+
+    assert (
+        state.last_error_message
+        == "ingestion failed"
+    )
+
+
+# Success-clears-retries regression test
+
+
+def test_success_clears_previous_retry_state(
+    tmp_path: Path,
+) -> None:
+    queue = LocalEventBus(
+        events_root=tmp_path,
+    )
+
+    queue.publish(
+        make_request_event()
+    )
+
+    retry_store = (
+        LocalIngestionRetryStore(
+            events_root=tmp_path,
+        )
+    )
+
+    retry_store.record_failure(
+        request_event_id=REQUEST_EVENT_ID,
+        failed_at=REQUEST_TIME,
+        error_type="RuntimeError",
+        error_message="previous failure",
+    )
+
+    worker = IngestionWorker(
+        queue=queue,
+        runner=RecordingRunner(
+            IngestionRunReference(
+                run_id="run-123",
+                manifest_path="manifest.json",
+            )
+        ),
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=retry_store,
+        clock=lambda: (
+            COMPLETED_TIME
+        ),
+        uuid_factory=lambda: (
+            COMPLETED_EVENT_ID
+        ),
+    )
+
+    assert (
+        worker.run_once()
+        == 1
+    )
+
+    assert (
+        retry_store.get(
+            REQUEST_EVENT_ID
+        )
+        is None
+    )
+
+def test_worker_logs_successful_ingestion_lifecycle(
+    tmp_path: Path,
+) -> None:
+    output = StringIO()
+
+    configure_logging(
+        stream=output
+    )
+
+    queue = LocalEventBus(
+        events_root=tmp_path,
+    )
+
+    queue.publish(
+        make_request_event()
+    )
+
+    worker = IngestionWorker(
+        queue=queue,
+        runner=RecordingRunner(
+            IngestionRunReference(
+                run_id="run-123",
+                manifest_path=(
+                    "manifest.json"
+                ),
+            )
+        ),
+        execution_store=(
+            LocalIngestionExecutionStore(
+                events_root=tmp_path,
+            )
+        ),
+        retry_store=(
+            LocalIngestionRetryStore(
+                events_root=tmp_path,
+            )
+        ),
+        clock=lambda: COMPLETED_TIME,
+        uuid_factory=lambda: (
+            COMPLETED_EVENT_ID
+        ),
+        logger=logging.getLogger(
+            "riverwatch.test.ingestion"
+        ),
+    )
+
+    assert worker.run_once() == 1
+
+    documents = [
+        json.loads(line)
+        for line in (
+            output
+            .getvalue()
+            .splitlines()
+        )
+        if line
+    ]
+
+    events = [
+        document["event"]
+        for document in documents
+    ]
+
+    assert events == [
+        "ingestion_request_started",
+        "ingestion_request_completed",
+    ]
+
+    completed = documents[-1]
+
+    assert (
+        completed["event_id"]
+        == str(REQUEST_EVENT_ID)
+    )
+
+    assert (
+        completed["correlation_id"]
+        == str(CORRELATION_ID)
+    )
+
+    assert (
+        completed["run_id"]
+        == "run-123"
     )

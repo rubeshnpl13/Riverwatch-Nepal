@@ -28,6 +28,9 @@ class EventType(StrEnum):
     INGESTION_COMPLETED = (
         "ingestion.completed"
     )
+    PROCESSING_COMPLETED = (
+        "processing.completed"
+    )
 
 
 @dataclass(
