@@ -22,6 +22,7 @@ locals {
 
     # Analytics
     "bigquery.googleapis.com",
+    "bigqueryconnection.googleapis.com",
 
     # Observability
     "logging.googleapis.com",

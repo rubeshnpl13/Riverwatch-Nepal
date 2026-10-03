@@ -1,0 +1,107 @@
+[
+  {
+    "name": "source_record_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "station_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_station_series_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "station_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "river_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "basin_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "latitude",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "longitude",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "water_level_m",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "warning_level_m",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "danger_level_m",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "trend",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "official_status",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "provider",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "original_source",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_created_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_modified_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingested_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_page_index",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  }
+]

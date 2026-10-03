@@ -1,0 +1,97 @@
+[
+  {
+    "name": "station_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "station_series_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "station_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "basin_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "latitude",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "longitude",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "elevation_m",
+    "type": "FLOAT",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "province_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "district_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "municipality_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ward_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "description",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "provider",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "original_source",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_created_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_modified_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingested_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_page_index",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  }
+]

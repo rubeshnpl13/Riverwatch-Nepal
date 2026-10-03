@@ -60,3 +60,107 @@ output "lake_managed_folders" {
   description = "Managed data lake folder paths."
   value       = module.data_lake.managed_folders
 }
+
+output "event_topic_names" {
+  description = "RiverWatch event Pub/Sub topic names."
+  value       = module.event_bus.topic_names
+}
+
+
+output "worker_subscription_names" {
+  description = "RiverWatch Pub/Sub worker subscription names."
+  value       = module.event_bus.worker_subscription_names
+}
+
+
+output "dead_letter_topic_ids" {
+  description = "RiverWatch Pub/Sub dead-letter topic IDs."
+  value       = module.event_bus.dead_letter_topic_ids
+}
+
+
+output "dead_letter_subscription_ids" {
+  description = "RiverWatch Pub/Sub dead-letter subscription IDs."
+  value       = module.event_bus.dead_letter_subscription_ids
+}
+
+
+output "processing_completed_audit_subscription_id" {
+  description = "Subscription retaining processing.completed events."
+
+  value = (
+    module.event_bus
+    .processing_completed_audit_subscription_id
+  )
+}
+output "analytics_dataset_id" {
+  description = "RiverWatch BigQuery analytics dataset."
+  value       = module.analytics.dataset_id
+}
+
+
+output "analytics_connection_name" {
+  description = "RiverWatch BigQuery lake connection."
+  value       = module.analytics.connection_name
+}
+
+
+output "analytics_connection_service_account_id" {
+  description = "Service account used for delegated lake access."
+
+  value = (
+    module.analytics
+    .connection_service_account_id
+  )
+}
+
+output "stations_external_table_id" {
+  description = (
+    "BigLake external station table ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .stations_external
+    .id
+  )
+}
+
+
+output "observations_external_table_id" {
+  description = (
+    "BigLake external observation table ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .observations_external
+    .id
+  )
+}
+
+
+output "stations_table_id" {
+  description = (
+    "Canonical RiverWatch stations view ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .stations
+    .id
+  )
+}
+
+
+output "observations_table_id" {
+  description = (
+    "Canonical RiverWatch observations view ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .observations
+    .id
+  )
+}
