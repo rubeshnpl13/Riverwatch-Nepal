@@ -3,3 +3,12 @@ project_id = "gcp-project-id"
 region = "asia-south1"
 
 environment = ""
+
+# Disabled by default to prevent accidental recurring
+# ingestion and processing costs.
+enable_ingestion_schedule = false
+
+# Used only when the schedule is enabled.
+ingestion_schedule = "5 * * * *"
+
+scheduler_time_zone = "Etc/UTC"

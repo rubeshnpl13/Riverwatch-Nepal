@@ -164,3 +164,26 @@ output "observations_table_id" {
     .id
   )
 }
+
+output "container_repository_name" {
+  description = "RiverWatch Artifact Registry repository."
+  value       = module.container_registry.repository_name
+}
+
+
+output "container_repository_uri" {
+  description = "RiverWatch Docker repository URI."
+  value       = module.container_registry.docker_repository_uri
+}
+
+
+output "scheduled_ingestion_job_name" {
+  description = "Cloud Scheduler ingestion job name when scheduling is enabled."
+  value       = module.scheduled_ingestion.job_name
+}
+
+
+output "scheduled_ingestion_trigger_payload" {
+  description = "Scheduled ingestion transport contract."
+  value       = module.scheduled_ingestion.trigger_payload
+}
