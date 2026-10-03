@@ -43,3 +43,20 @@ output "runtime_service_account_members" {
   description = "RiverWatch runtime IAM member identifiers."
   value       = module.runtime_service_accounts.members
 }
+
+output "lake_bucket_name" {
+  description = "RiverWatch Cloud Storage data lake bucket."
+  value       = module.data_lake.bucket_name
+}
+
+
+output "lake_bucket_uri" {
+  description = "RiverWatch Cloud Storage data lake URI."
+  value       = module.data_lake.bucket_uri
+}
+
+
+output "lake_managed_folders" {
+  description = "Managed data lake folder paths."
+  value       = module.data_lake.managed_folders
+}
