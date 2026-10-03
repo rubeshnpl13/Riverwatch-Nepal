@@ -1,0 +1,5 @@
+project_id = "gcp-project-id"
+
+region = "asia-south1"
+
+environment = ""
