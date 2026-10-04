@@ -1,7 +1,7 @@
 locals {
   ingestion_event_image  = "${module.container_registry.docker_repository_uri}/ingestion:phase-11-placeholder"
   processing_event_image = "${module.container_registry.docker_repository_uri}/processing:phase-11-placeholder"
-  processing_spark_image = "${module.container_registry.docker_repository_uri}/processing-spark-phase-11-placeholder"
+  processing_spark_image = "${module.container_registry.docker_repository_uri}/processing-spark:phase-11-placeholder"
 
 }
 

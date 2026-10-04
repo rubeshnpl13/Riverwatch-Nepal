@@ -33,7 +33,7 @@ htmlcov/
 .terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
+
 
 # Spark
 spark-warehouse/
