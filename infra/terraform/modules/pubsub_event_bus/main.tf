@@ -12,14 +12,14 @@ locals {
 
   worker_subscriptions = {
     ingestion = {
-      name             = "ingestion-worker"
-      topic            = "ingestion-requested"
+      name              = "ingestion-worker"
+      topic             = "ingestion-requested"
       dead_letter_topic = "ingestion-requested"
     }
 
     processing = {
-      name             = "processing-worker"
-      topic            = "ingestion-completed"
+      name              = "processing-worker"
+      topic             = "ingestion-completed"
       dead_letter_topic = "ingestion-completed"
     }
   }
@@ -31,8 +31,7 @@ resource "google_pubsub_topic" "event" {
 
   project = var.project_id
   name    = "${var.name_prefix}-${each.value}"
-
-  labels = var.labels
+  labels  = var.labels
 }
 
 
@@ -40,11 +39,8 @@ resource "google_pubsub_topic" "dead_letter" {
   for_each = local.dead_letter_topics
 
   project = var.project_id
-  name = (
-    "${var.name_prefix}-${each.value}-dlq"
-  )
-
-  labels = var.labels
+  name    = "${var.name_prefix}-${each.value}-dlq"
+  labels  = var.labels
 }
 
 
@@ -52,38 +48,47 @@ resource "google_pubsub_subscription" "worker" {
   for_each = local.worker_subscriptions
 
   project = var.project_id
-  name = (
-    "${var.name_prefix}-${each.value.name}"
-  )
+  name    = "${var.name_prefix}-${each.value.name}"
+  topic   = google_pubsub_topic.event[each.value.topic].id
 
-  topic = (
-    google_pubsub_topic.event[
-      each.value.topic
-    ].id
-  )
-
-  ack_deadline_seconds = (
-    var.ack_deadline_seconds
-  )
-
-  message_retention_duration = (
-    var.message_retention_duration
-  )
-
-  retain_acked_messages = false
+  ack_deadline_seconds       = var.ack_deadline_seconds
+  message_retention_duration = var.message_retention_duration
+  retain_acked_messages      = false
 
   expiration_policy {
     ttl = ""
   }
 
   retry_policy {
-    minimum_backoff = (
-      var.minimum_backoff
-    )
+    minimum_backoff = var.minimum_backoff
+    maximum_backoff = var.maximum_backoff
+  }
 
-    maximum_backoff = (
-      var.maximum_backoff
-    )
+    dynamic "push_config" {
+    for_each = contains(
+      keys(var.worker_push_configs),
+      each.key,
+    ) ? [
+      var.worker_push_configs[each.key]
+    ] : []
+
+    iterator = worker_push
+
+    content {
+      push_endpoint = worker_push.value.push_endpoint
+
+      oidc_token {
+        service_account_email = (
+          worker_push.value.service_account_email
+        )
+
+        audience = worker_push.value.audience
+      }
+
+      attributes = {
+        x-goog-version = "v1"
+      }
+    }
   }
 
   dead_letter_policy {
@@ -106,26 +111,12 @@ resource "google_pubsub_subscription" "dead_letter" {
   for_each = local.dead_letter_topics
 
   project = var.project_id
+  name    = "${var.name_prefix}-${each.value}-dlq"
+  topic   = google_pubsub_topic.dead_letter[each.value].id
 
-  name = (
-    "${var.name_prefix}-${each.value}-dlq"
-  )
-
-  topic = (
-    google_pubsub_topic.dead_letter[
-      each.value
-    ].id
-  )
-
-  ack_deadline_seconds = (
-    var.ack_deadline_seconds
-  )
-
-  message_retention_duration = (
-    var.message_retention_duration
-  )
-
-  retain_acked_messages = false
+  ack_deadline_seconds       = var.ack_deadline_seconds
+  message_retention_duration = var.message_retention_duration
+  retain_acked_messages      = false
 
   expiration_policy {
     ttl = ""
@@ -137,26 +128,12 @@ resource "google_pubsub_subscription" "dead_letter" {
 
 resource "google_pubsub_subscription" "processing_completed_audit" {
   project = var.project_id
+  name    = "${var.name_prefix}-processing-completed-audit"
+  topic   = google_pubsub_topic.event["processing-completed"].id
 
-  name = (
-    "${var.name_prefix}-processing-completed-audit"
-  )
-
-  topic = (
-    google_pubsub_topic.event[
-      "processing-completed"
-    ].id
-  )
-
-  ack_deadline_seconds = (
-    var.ack_deadline_seconds
-  )
-
-  message_retention_duration = (
-    var.message_retention_duration
-  )
-
-  retain_acked_messages = false
+  ack_deadline_seconds       = var.ack_deadline_seconds
+  message_retention_duration = var.message_retention_duration
+  retain_acked_messages      = false
 
   expiration_policy {
     ttl = ""

@@ -12,3 +12,17 @@ enable_ingestion_schedule = false
 ingestion_schedule = "5 * * * *"
 
 scheduler_time_zone = "Etc/UTC"
+
+# Managed Service for Apache Spark runtime.
+dataproc_runtime_version = "3.0"
+
+enable_cloud_run_event_services = false
+
+# Phase 11 publishes the FastAPI application image.
+# Keep disabled until the image exists.
+enable_api_service = false
+
+api_cors_origins = [
+  "http://127.0.0.1:5173",
+  "http://localhost:5173",
+]

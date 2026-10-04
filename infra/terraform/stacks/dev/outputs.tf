@@ -27,6 +27,7 @@ output "common_labels" {
   value       = local.common_labels
 }
 
+
 output "enabled_services" {
   description = "Google Cloud APIs managed for RiverWatch."
   value       = module.project_services.enabled_services
@@ -44,6 +45,7 @@ output "runtime_service_account_members" {
   value       = module.runtime_service_accounts.members
 }
 
+
 output "lake_bucket_name" {
   description = "RiverWatch Cloud Storage data lake bucket."
   value       = module.data_lake.bucket_name
@@ -60,6 +62,7 @@ output "lake_managed_folders" {
   description = "Managed data lake folder paths."
   value       = module.data_lake.managed_folders
 }
+
 
 output "event_topic_names" {
   description = "RiverWatch event Pub/Sub topic names."
@@ -93,6 +96,8 @@ output "processing_completed_audit_subscription_id" {
     .processing_completed_audit_subscription_id
   )
 }
+
+
 output "analytics_dataset_id" {
   description = "RiverWatch BigQuery analytics dataset."
   value       = module.analytics.dataset_id
@@ -113,6 +118,7 @@ output "analytics_connection_service_account_id" {
     .connection_service_account_id
   )
 }
+
 
 output "stations_external_table_id" {
   description = (
@@ -165,6 +171,7 @@ output "observations_table_id" {
   )
 }
 
+
 output "container_repository_name" {
   description = "RiverWatch Artifact Registry repository."
   value       = module.container_registry.repository_name
@@ -186,4 +193,105 @@ output "scheduled_ingestion_job_name" {
 output "scheduled_ingestion_trigger_payload" {
   description = "Scheduled ingestion transport contract."
   value       = module.scheduled_ingestion.trigger_payload
+}
+
+
+output "ingestion_event_service_name" {
+  description = "Cloud Run ingestion event service name when enabled."
+
+  value = (
+    module.ingestion_event_service.name
+  )
+}
+
+
+output "ingestion_event_service_uri" {
+  description = "Cloud Run ingestion event service URI when enabled."
+
+  value = (
+    module.ingestion_event_service.uri
+  )
+}
+
+
+output "processing_event_service_name" {
+  description = "Cloud Run processing event service name when enabled."
+
+  value = (
+    module.processing_event_service.name
+  )
+}
+
+
+output "processing_event_service_uri" {
+  description = "Cloud Run processing event service URI when enabled."
+
+  value = (
+    module.processing_event_service.uri
+  )
+}
+
+output "processing_gateway_service_account_email" {
+  description = (
+    "Cloud Run processing gateway identity."
+  )
+
+  value = (
+    module.runtime_service_accounts.emails[
+      "processing_gateway"
+    ]
+  )
+}
+
+
+output "processing_runtime_service_account_email" {
+  description = (
+    "Managed Spark workload identity."
+  )
+
+  value = (
+    module.runtime_service_accounts.emails[
+      "processing"
+    ]
+  )
+}
+
+
+output "dataproc_runtime_version" {
+  description = (
+    "Pinned Managed Spark runtime version."
+  )
+
+  value = (
+    var.dataproc_runtime_version
+  )
+}
+
+
+output "processing_spark_image" {
+  description = (
+    "Managed Spark custom container image contract."
+  )
+
+  value = (
+    local.processing_spark_image
+  )
+}
+
+
+output "api_service_name" {
+  description = "RiverWatch FastAPI Cloud Run service name when enabled."
+  value       = module.api_service.name
+}
+
+
+output "api_service_uri" {
+  description = "RiverWatch FastAPI public HTTPS URI when enabled."
+  value       = module.api_service.uri
+}
+
+
+output "api_image" {
+  description = "FastAPI container image contract."
+  value       = local.api_image
 }

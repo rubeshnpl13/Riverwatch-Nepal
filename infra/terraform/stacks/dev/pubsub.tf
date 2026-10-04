@@ -11,7 +11,12 @@ module "event_bus" {
   labels      = local.common_labels
 
   message_retention_duration = "604800s"
-  ack_deadline_seconds       = 60
+
+  ack_deadline_seconds = (
+    var.enable_cloud_run_event_services
+    ? 600
+    : 60
+  )
 
   minimum_backoff = "10s"
   maximum_backoff = "300s"
@@ -19,6 +24,44 @@ module "event_bus" {
   # Pub/Sub requires at least five attempts
   # when a dead-letter policy is configured.
   max_delivery_attempts = 5
+
+  worker_push_configs = (
+    var.enable_cloud_run_event_services
+    ? {
+      ingestion = {
+        push_endpoint = (
+          "${module.ingestion_event_service.uri}/events/pubsub"
+        )
+
+        service_account_email = (
+          module.runtime_service_accounts.emails[
+            "event_invoker"
+          ]
+        )
+
+        audience = (
+          module.ingestion_event_service.uri
+        )
+      }
+
+      processing = {
+        push_endpoint = (
+          "${module.processing_event_service.uri}/events/pubsub"
+        )
+
+        service_account_email = (
+          module.runtime_service_accounts.emails[
+            "event_invoker"
+          ]
+        )
+
+        audience = (
+          module.processing_event_service.uri
+        )
+      }
+    }
+    : {}
+  )
 
   depends_on = [
     module.project_services,
@@ -32,7 +75,29 @@ locals {
   )
 }
 
+
+resource "google_service_account_iam_member" "pubsub_event_invoker_token_creator" {
+  service_account_id = (
+    module.runtime_service_accounts.names[
+      "event_invoker"
+    ]
+  )
+
+  role = "roles/iam.serviceAccountTokenCreator"
+
+  member = (
+    local.pubsub_service_agent_member
+  )
+}
+
+
 resource "google_pubsub_subscription_iam_member" "ingestion_consumer" {
+  count = (
+    var.enable_cloud_run_event_services
+    ? 0
+    : 1
+  )
+
   project = var.project_id
 
   subscription = (
@@ -70,7 +135,14 @@ resource "google_pubsub_topic_iam_member" "ingestion_completion_publisher" {
   )
 }
 
+
 resource "google_pubsub_subscription_iam_member" "processing_consumer" {
+  count = (
+    var.enable_cloud_run_event_services
+    ? 0
+    : 1
+  )
+
   project = var.project_id
 
   subscription = (
@@ -107,6 +179,7 @@ resource "google_pubsub_topic_iam_member" "processing_completion_publisher" {
     ]
   )
 }
+
 
 resource "google_pubsub_topic_iam_member" "dead_letter_publisher" {
   for_each = (

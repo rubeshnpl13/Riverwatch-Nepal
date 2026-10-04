@@ -78,3 +78,38 @@ variable "max_delivery_attempts" {
     error_message = "max_delivery_attempts must be between 5 and 100."
   }
 }
+
+variable "worker_push_configs" {
+  description = "Optional authenticated push configuration for RiverWatch worker subscriptions."
+
+  type = map(object({
+    push_endpoint         = string
+    service_account_email = string
+    audience              = string
+  }))
+
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for key in keys(var.worker_push_configs) : contains(
+        ["ingestion", "processing"],
+        key
+      )
+    ])
+
+    error_message = "worker_push_configs may contain only 'ingestion' and 'processing'."
+  }
+
+  validation {
+    condition = alltrue([
+      for config in values(var.worker_push_configs) : (
+        length(trimspace(config.push_endpoint)) > 0 &&
+        length(trimspace(config.service_account_email)) > 0 &&
+        length(trimspace(config.audience)) > 0
+      )
+    ])
+
+    error_message = "Worker push endpoint, service account, and audience must not be blank."
+  }
+}

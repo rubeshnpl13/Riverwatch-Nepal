@@ -9,7 +9,10 @@ resource "google_cloud_run_v2_service" "this" {
 
   # Pub/Sub in the same project is recognized
   # as internal Cloud Run traffic.
-  ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  ingress = var.ingress
+  invoker_iam_disabled = (
+    var.invoker_iam_disabled
+  )
 
   labels = var.labels
 

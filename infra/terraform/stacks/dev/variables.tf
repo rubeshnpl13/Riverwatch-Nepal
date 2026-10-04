@@ -86,11 +86,55 @@ variable "scheduler_time_zone" {
 }
 
 variable "enable_cloud_run_event_services" {
-  description = (
-    "Whether the ingestion and processing "
-    "event services are deployed to Cloud Run."
-  )
+  description = "Whether the ingestion and processing event services are deployed to Cloud Run."
+  type        = bool
+  default     = false
+}
+
+variable "dataproc_runtime_version" {
+  description = "Managed Service for Apache Spark runtime version."
+
+  type    = string
+  default = "3.0"
+
+  validation {
+    condition = (
+      length(
+        trimspace(
+          var.dataproc_runtime_version
+        )
+      ) > 0
+    )
+
+    error_message = "dataproc_runtime_version must not be blank."
+  }
+}
+variable "enable_api_service" {
+  description = "Whether the RiverWatch FastAPI service is deployed to Cloud Run."
 
   type    = bool
   default = false
+}
+
+variable "api_cors_origins" {
+  description = "Browser origins allowed by the RiverWatch FastAPI CORS policy."
+
+  type = list(string)
+
+  default = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+  ]
+
+  validation {
+    condition = (
+      length(var.api_cors_origins) > 0 &&
+      alltrue([
+        for origin in var.api_cors_origins :
+        length(trimspace(origin)) > 0
+      ])
+    )
+
+    error_message = "api_cors_origins must contain at least one non-blank origin."
+  }
 }

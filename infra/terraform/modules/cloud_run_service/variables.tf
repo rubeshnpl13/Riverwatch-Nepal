@@ -107,3 +107,31 @@ variable "enabled" {
   type        = bool
   default     = false
 }
+variable "ingress" {
+  description = "Cloud Run ingress policy."
+  type        = string
+  default     = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  validation {
+    condition = contains(
+      [
+        "INGRESS_TRAFFIC_ALL",
+        "INGRESS_TRAFFIC_INTERNAL_ONLY",
+        "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER",
+      ],
+      var.ingress,
+    )
+
+    error_message = "Unsupported Cloud Run ingress policy."
+  }
+}
+
+
+variable "invoker_iam_disabled" {
+  description = (
+    "Whether Cloud Run skips the Invoker IAM check."
+  )
+
+  type    = bool
+  default = false
+}

@@ -19,6 +19,7 @@ locals {
     # Processing
     "compute.googleapis.com",
     "dataproc.googleapis.com",
+    "dataprocrm.googleapis.com",
 
     # Analytics
     "bigquery.googleapis.com",
