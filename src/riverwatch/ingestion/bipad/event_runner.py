@@ -4,8 +4,6 @@ import logging
 from pathlib import Path
 from uuid import UUID
 
-from pydantic import ValidationError
-
 from riverwatch.config import (
     Settings,
     get_settings,
@@ -28,17 +26,19 @@ from riverwatch.ingestion.bipad.quarantine_writer import (
 from riverwatch.ingestion.bipad.raw_writer import (
     BipadRawPageWriter,
 )
+from riverwatch.ingestion.bipad.run_repository import (
+    BipadEventRunnerError,
+    IngestionRunRepository,
+    LocalIngestionRunRepository,
+)
 from riverwatch.ingestion.bipad.service import (
     RiverStationIngestionService,
-)
-from riverwatch.models.source import (
-    DataProvider,
 )
 from riverwatch.storage.local import (
     LocalObjectStore,
 )
-from riverwatch.storage.manifest import (
-    BipadRunManifest,
+from riverwatch.storage.object_store import (
+    ObjectStore,
 )
 
 LOGGER_NAME = (
@@ -52,11 +52,6 @@ SUPPORTED_ENDPOINT = (
 )
 
 
-class BipadEventRunnerError(
-    RuntimeError
-):
-    """BIPAD event runner state is invalid."""
-
 
 class UnsupportedIngestionRequestError(
     ValueError
@@ -65,17 +60,18 @@ class UnsupportedIngestionRequestError(
 
 
 class BipadEventIngestionRunner:
-    def __init__(
-        self,
-        *,
-        lake_root: Path,
-        settings: Settings,
-        logger: logging.Logger | None = None,
-    ) -> None:
-        self._lake_root = (
-            lake_root.expanduser().resolve()
-        )
 
+    def __init__(
+            self,
+            *,
+            lake_root: Path | None = None,
+            settings: Settings,
+            logger: logging.Logger | None = None,
+            store: ObjectStore | None = None,
+            run_repository: (
+                    IngestionRunRepository | None
+            ) = None,
+    ) -> None:
         self._settings = settings
 
         self._logger = (
@@ -85,26 +81,67 @@ class BipadEventIngestionRunner:
                 LOGGER_NAME
             )
         )
+        if (
+                (store is None)
+                != (run_repository is None)
+        ):
+            raise ValueError(
+                "store and run_repository must "
+                "be provided together"
+            )
 
-        store = LocalObjectStore(
-            root=self._lake_root,
+        if store is None:
+            if lake_root is None:
+                raise ValueError(
+                    "lake_root must be provided "
+                    "for local storage"
+                )
+
+            resolved_lake_root = (
+                lake_root
+                .expanduser()
+                .resolve()
+            )
+
+            resolved_store: ObjectStore = (
+                LocalObjectStore(
+                    root=resolved_lake_root,
+                )
+            )
+
+            resolved_repository: (
+                IngestionRunRepository
+            ) = LocalIngestionRunRepository(
+                lake_root=resolved_lake_root,
+            )
+
+        else:
+            assert run_repository is not None
+
+            resolved_store = store
+            resolved_repository = (
+                run_repository
+            )
+
+        self._run_repository = (
+            resolved_repository
         )
 
         self._raw_writer = (
             BipadRawPageWriter(
-                store=store
+                store=resolved_store
             )
         )
 
         self._quarantine_writer = (
             BipadQuarantineWriter(
-                store=store
+                store=resolved_store
             )
         )
 
         self._manifest_writer = (
             BipadRunManifestWriter(
-                store=store
+                store=resolved_store
             )
         )
 
@@ -119,10 +156,13 @@ class BipadEventIngestionRunner:
             provider=provider,
             endpoint=endpoint,
         )
-
+        run_prefix = self._run_prefix(
+            idempotency_key
+        )
         existing = (
-            self._find_completed_run(
-                idempotency_key
+            self._run_repository
+            .find_completed_run(
+                run_prefix=run_prefix,
             )
         )
 
@@ -130,8 +170,9 @@ class BipadEventIngestionRunner:
             return existing
 
         attempt_number = (
-            self._next_attempt_number(
-                idempotency_key
+            self._run_repository
+            .next_attempt_number(
+                run_prefix=run_prefix,
             )
         )
 
@@ -179,8 +220,9 @@ class BipadEventIngestionRunner:
             )
 
         reference = (
-            self._reference_for_run_id(
-                run_id
+            self._run_repository
+            .reference_for_run_id(
+                run_id=run_id,
             )
         )
 
@@ -216,256 +258,9 @@ class BipadEventIngestionRunner:
                 )
             )
 
-    def _find_completed_run(
-        self,
-        idempotency_key: UUID,
-    ) -> IngestionRunReference | None:
-        prefix = self._run_prefix(
-            idempotency_key
-        )
-
-        manifest_root = (
-            self._lake_root
-            / "manifests"
-            / "provider=bipad"
-            / (
-                "endpoint="
-                f"{SUPPORTED_ENDPOINT}"
-            )
-        )
-
-        if not manifest_root.is_dir():
-            return None
-
-        references: list[
-            IngestionRunReference
-        ] = []
-
-        for path in manifest_root.rglob(
-            "manifest.json"
-        ):
-            parent_name = (
-                path.parent.name
-            )
-
-            if not parent_name.startswith(
-                "run_id="
-            ):
-                continue
-
-            run_id = parent_name.removeprefix(
-                "run_id="
-            )
-
-            if not run_id.startswith(
-                prefix
-            ):
-                continue
-
-            reference = (
-                self
-                ._load_completed_manifest(
-                    path=path,
-                    expected_run_id=run_id,
-                )
-            )
-
-            references.append(
-                reference
-            )
-
-        if not references:
-            return None
-
-        if len(references) > 1:
-            raise BipadEventRunnerError(
-                "Multiple completed ingestion "
-                "runs exist for request "
-                f"{idempotency_key}"
-            )
-
-        return references[0]
-
-    def _reference_for_run_id(
-        self,
-        run_id: str,
-    ) -> IngestionRunReference | None:
-        manifest_root = (
-            self._lake_root
-            / "manifests"
-            / "provider=bipad"
-            / (
-                "endpoint="
-                f"{SUPPORTED_ENDPOINT}"
-            )
-        )
-
-        if not manifest_root.is_dir():
-            return None
-
-        matches = [
-            path
-            for path in (
-                manifest_root.rglob(
-                    "manifest.json"
-                )
-            )
-            if (
-                path.parent.name
-                == f"run_id={run_id}"
-            )
-        ]
-
-        if not matches:
-            return None
-
-        if len(matches) > 1:
-            raise BipadEventRunnerError(
-                "Multiple manifests exist for "
-                f"run_id={run_id}"
-            )
-
-        return self._load_completed_manifest(
-            path=matches[0],
-            expected_run_id=run_id,
-        )
-
-    def _load_completed_manifest(
-        self,
-        *,
-        path: Path,
-        expected_run_id: str,
-    ) -> IngestionRunReference:
-        try:
-            manifest = (
-                BipadRunManifest
-                .model_validate_json(
-                    path.read_text(
-                        encoding="utf-8"
-                    )
-                )
-            )
-
-        except (
-            OSError,
-            ValidationError,
-        ) as exc:
-            raise BipadEventRunnerError(
-                "Unable to load ingestion "
-                f"manifest: {path}"
-            ) from exc
-
-        if (
-            manifest.provider
-            != DataProvider.BIPAD
-        ):
-            raise BipadEventRunnerError(
-                "Recovered manifest has "
-                "unexpected provider"
-            )
-
-        if (
-            manifest.endpoint
-            != BipadEndpoint
-            .RIVER_STATIONS
-        ):
-            raise BipadEventRunnerError(
-                "Recovered manifest has "
-                "unexpected endpoint"
-            )
-
-        if (
-            manifest.run_id
-            != expected_run_id
-        ):
-            raise BipadEventRunnerError(
-                "Recovered manifest run_id "
-                "does not match its path"
-            )
-
-        if manifest.status != "completed":
-            raise BipadEventRunnerError(
-                "Recovered ingestion manifest "
-                "is not completed"
-            )
-
-        try:
-            relative_path = (
-                path.relative_to(
-                    self._lake_root
-                )
-            )
-
-        except ValueError as exc:
-            raise BipadEventRunnerError(
-                "Manifest is outside "
-                "the lake root"
-            ) from exc
-
-        return IngestionRunReference(
-            run_id=manifest.run_id,
-            manifest_path=(
-                relative_path.as_posix()
-            ),
-        )
-
-    def _next_attempt_number(
-        self,
-        idempotency_key: UUID,
-    ) -> int:
-        prefix = self._run_prefix(
-            idempotency_key
-        )
-
-        highest_attempt = 0
-
-        for top_level in (
-            "raw",
-            "quarantine",
-            "manifests",
-        ):
-            root = (
-                self._lake_root
-                / top_level
-            )
-
-            if not root.is_dir():
-                continue
-
-            for path in root.rglob(
-                f"run_id={prefix}*"
-            ):
-                if not path.is_dir():
-                    continue
-
-                run_id = (
-                    path.name
-                    .removeprefix(
-                        "run_id="
-                    )
-                )
-
-                attempt = (
-                    self
-                    ._parse_attempt_number(
-                        run_id=run_id,
-                        prefix=prefix,
-                    )
-                )
-
-                if attempt is None:
-                    continue
-
-                highest_attempt = max(
-                    highest_attempt,
-                    attempt,
-                )
-
-        return highest_attempt + 1
-
     @staticmethod
     def _run_prefix(
-        idempotency_key: UUID,
+            idempotency_key: UUID,
     ) -> str:
         return (
             "event-"
@@ -475,10 +270,10 @@ class BipadEventIngestionRunner:
 
     @classmethod
     def _build_run_id(
-        cls,
-        *,
-        idempotency_key: UUID,
-        attempt_number: int,
+            cls,
+            *,
+            idempotency_key: UUID,
+            attempt_number: int,
     ) -> str:
         if attempt_number < 1:
             raise ValueError(
@@ -487,41 +282,12 @@ class BipadEventIngestionRunner:
             )
 
         return (
-            cls._run_prefix(
-                idempotency_key
-            )
-            + f"{attempt_number:04d}"
+                cls._run_prefix(
+                    idempotency_key
+                )
+                + f"{attempt_number:04d}"
         )
 
-    @staticmethod
-    def _parse_attempt_number(
-        *,
-        run_id: str,
-        prefix: str,
-    ) -> int | None:
-        if not run_id.startswith(
-            prefix
-        ):
-            return None
-
-        raw_attempt = run_id[
-            len(prefix):
-        ]
-
-        if (
-            len(raw_attempt) != 4
-            or not raw_attempt.isdigit()
-        ):
-            return None
-
-        attempt = int(
-            raw_attempt
-        )
-
-        if attempt < 1:
-            return None
-
-        return attempt
 
 
 def build_runner(

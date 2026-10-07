@@ -930,3 +930,20 @@ def test_worker_logs_successful_ingestion_lifecycle(
         completed["run_id"]
         == "run-123"
     )
+
+def test_run_reference_rejects_naive_completed_at() -> None:
+    with pytest.raises(
+        ValueError,
+        match="completed_at must be timezone-aware",
+    ):
+        IngestionRunReference(
+            run_id="run-123",
+            manifest_path="manifest.json",
+            completed_at=datetime(
+                2026,
+                10,
+                5,
+                0,
+                0,
+            ),
+        )

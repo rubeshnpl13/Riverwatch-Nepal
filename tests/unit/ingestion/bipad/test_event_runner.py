@@ -14,6 +14,12 @@ from riverwatch.ingestion.bipad.event_runner import (
     BipadEventIngestionRunner,
     UnsupportedIngestionRequestError,
 )
+from riverwatch.ingestion.bipad.run_repository import (
+    LocalIngestionRunRepository,
+)
+from riverwatch.storage.local import (
+    LocalObjectStore,
+)
 
 BASE_URL = (
     "https://bipadportal.gov.np"
@@ -274,3 +280,74 @@ def test_runner_rejects_unsupported_endpoint(
             endpoint="river",
             idempotency_key=REQUEST_ID,
         )
+
+def test_runner_rejects_store_without_repository(
+    tmp_path: Path,
+) -> None:
+    store = LocalObjectStore(
+        root=tmp_path
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be provided together",
+    ):
+        BipadEventIngestionRunner(
+            lake_root=tmp_path,
+            settings=make_settings(),
+            store=store,
+        )
+
+
+def test_runner_rejects_repository_without_store(
+    tmp_path: Path,
+) -> None:
+    repository = (
+        LocalIngestionRunRepository(
+            lake_root=tmp_path
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be provided together",
+    ):
+        BipadEventIngestionRunner(
+            lake_root=tmp_path,
+            settings=make_settings(),
+            run_repository=repository,
+        )
+
+def test_runner_requires_lake_root_for_local_backend() -> None:
+    with pytest.raises(
+        ValueError,
+        match="lake_root must be provided",
+    ):
+        BipadEventIngestionRunner(
+            settings=make_settings(),
+        )
+
+
+def test_runner_allows_injected_backends_without_lake_root(
+    tmp_path: Path,
+) -> None:
+    store = LocalObjectStore(
+        root=tmp_path,
+    )
+
+    repository = (
+        LocalIngestionRunRepository(
+            lake_root=tmp_path,
+        )
+    )
+
+    runner = BipadEventIngestionRunner(
+        settings=make_settings(),
+        store=store,
+        run_repository=repository,
+    )
+
+    assert isinstance(
+        runner,
+        BipadEventIngestionRunner,
+    )

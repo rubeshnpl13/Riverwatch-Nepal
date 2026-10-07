@@ -44,6 +44,7 @@ def utc_now() -> datetime:
 class IngestionRunReference:
     run_id: str
     manifest_path: str
+    completed_at: datetime | None = None
 
     def __post_init__(
         self,
@@ -59,6 +60,27 @@ class IngestionRunReference:
                 "be blank"
             )
 
+        if self.completed_at is None:
+            return
+
+        if (
+            self.completed_at.tzinfo
+            is None
+            or self.completed_at.utcoffset()
+            is None
+        ):
+            raise ValueError(
+                "completed_at must be "
+                "timezone-aware"
+            )
+
+        object.__setattr__(
+            self,
+            "completed_at",
+            self.completed_at.astimezone(
+                UTC
+            ),
+        )
 
 class IngestionRunner(
     Protocol,
