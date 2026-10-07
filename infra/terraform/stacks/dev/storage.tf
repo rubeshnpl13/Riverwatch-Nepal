@@ -52,6 +52,10 @@ locals {
       folder = "quarantine/"
       role   = "roles/storage.objectCreator"
     }
+    quarantine_viewer = {
+      folder = "quarantine/"
+      role   = "roles/storage.objectViewer"
+    }
 
     manifests_creator = {
       folder = "manifests/"
@@ -103,14 +107,9 @@ locals {
       role   = "roles/storage.objectUser"
     }
 
-    processed_creator = {
+    processed_user = {
       folder = "processed/"
-      role   = "roles/storage.objectCreator"
-    }
-
-    processed_viewer = {
-      folder = "processed/"
-      role   = "roles/storage.objectViewer"
+      role   = "roles/storage.objectUser"
     }
 
     quality_creator = {
@@ -142,6 +141,54 @@ resource "google_storage_managed_folder_iam_member" "processing" {
   member = (
     module.runtime_service_accounts.members[
       "processing"
+    ]
+  )
+}
+
+resource "google_storage_notification" "processing_completion_receipts" {
+  count = (
+    var.enable_cloud_run_event_services
+    ? 1
+    : 0
+  )
+
+  bucket = (
+    module.data_lake.bucket_name
+  )
+
+  payload_format = "NONE"
+
+  topic = (
+    google_pubsub_topic
+    .processing_completion_receipt_notifications
+    .id
+  )
+
+  event_types = [
+    "OBJECT_FINALIZE",
+  ]
+
+  depends_on = [
+    google_pubsub_topic_iam_member.processing_completion_receipt_gcs_publisher,
+  ]
+}
+
+resource "google_storage_managed_folder_iam_member" "processing_completion_relay_quality_viewer" {
+  bucket = (
+    module.data_lake.bucket_name
+  )
+
+  managed_folder = (
+    module.data_lake.managed_folders[
+      "quality/"
+    ]
+  )
+
+  role = "roles/storage.objectViewer"
+
+  member = (
+    module.runtime_service_accounts.members[
+      "processing_relay"
     ]
   )
 }

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from datetime import (
     UTC,
@@ -7,9 +9,19 @@ from pathlib import Path
 from uuid import UUID
 
 import httpx
+import pytest
 import respx
 from pyspark.sql import SparkSession
 
+import riverwatch.cloud.processing_job as processing_job
+from riverwatch.cloud.processing_completion_relay import (
+    decode_gcs_finalize_push,
+    relay_processing_completion,
+)
+from riverwatch.cloud.processing_pipeline import (
+    CloudProcessingDatasetResult,
+    CloudProcessingRunResult,
+)
 from riverwatch.config import (
     Settings,
 )
@@ -25,17 +37,11 @@ from riverwatch.events.local import (
 from riverwatch.events.model import (
     EventType,
 )
-from riverwatch.events.processing import (
-    ProcessingWorker,
-)
-from riverwatch.events.processing_idempotency import (
-    LocalProcessingExecutionStore,
-)
-from riverwatch.events.processing_retry import (
-    LocalProcessingRetryStore,
-)
 from riverwatch.events.retry import (
     LocalIngestionRetryStore,
+)
+from riverwatch.events.serialization import (
+    decode_event,
 )
 from riverwatch.events.worker import (
     IngestionWorker,
@@ -43,8 +49,21 @@ from riverwatch.events.worker import (
 from riverwatch.ingestion.bipad.event_runner import (
     BipadEventIngestionRunner,
 )
+from riverwatch.processing.models import (
+    ProcessedDataset,
+)
 from riverwatch.processing.spark.event_runner import (
     SparkProcessingEventRunner,
+)
+from riverwatch.storage.errors import (
+    ObjectAlreadyExistsError,
+    StorageError,
+)
+from riverwatch.storage.models import (
+    StoredObject,
+)
+from riverwatch.storage.serialization import (
+    sha256_hex,
 )
 
 BASE_URL = (
@@ -68,10 +87,6 @@ REQUEST_EVENT_ID = UUID(
 
 INGESTION_COMPLETED_EVENT_ID = UUID(
     "22222222-2222-2222-2222-222222222222"
-)
-
-PROCESSING_COMPLETED_EVENT_ID = UUID(
-    "33333333-3333-3333-3333-333333333333"
 )
 
 CORRELATION_ID = UUID(
@@ -107,6 +122,88 @@ PROCESSING_COMPLETED_TIME = datetime(
 )
 
 
+class InMemoryProcessingCloudStore:
+    def __init__(
+        self,
+    ) -> None:
+        self.bucket_name = (
+            "riverwatch-integration-lake"
+        )
+
+        self.objects: dict[
+            str,
+            bytes,
+        ] = {}
+
+    def object_exists(
+        self,
+        *,
+        key: str,
+    ) -> bool:
+        return key in self.objects
+
+    def prefix_exists(
+        self,
+        *,
+        prefix: str,
+    ) -> bool:
+        normalized = (
+            f"{prefix.rstrip('/')}/"
+        )
+
+        return any(
+            key.startswith(
+                normalized
+            )
+            for key in self.objects
+        )
+
+    def read_bytes(
+        self,
+        *,
+        key: str,
+    ) -> bytes:
+        try:
+            return self.objects[
+                key
+            ]
+
+        except KeyError as exc:
+            raise StorageError(
+                f"missing object: {key}"
+            ) from exc
+
+    def create_bytes(
+        self,
+        *,
+        key: str,
+        data: bytes,
+        content_type: str,
+    ) -> StoredObject:
+        if key in self.objects:
+            raise ObjectAlreadyExistsError(
+                "Object already exists: "
+                f"{key}"
+            )
+
+        self.objects[
+            key
+        ] = data
+
+        return StoredObject(
+            key=key,
+            size_bytes=len(
+                data
+            ),
+            content_type=(
+                content_type
+            ),
+            sha256=sha256_hex(
+                data
+            ),
+        )
+
+
 def load_station_fixture(
 ) -> dict[str, object]:
     return json.loads(
@@ -126,9 +223,10 @@ def make_settings() -> Settings:
 
 
 @respx.mock
-def test_event_pipeline_ingests_processes_and_publishes_completion(
+def test_event_pipeline_persists_then_relays_processing_completion(
     spark: SparkSession,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events_root = (
         tmp_path
@@ -163,7 +261,9 @@ def test_event_pipeline_ingests_processes_and_publishes_completion(
     request_publisher = (
         IngestionRequestPublisher(
             publisher=queue,
-            clock=lambda: REQUEST_TIME,
+            clock=lambda: (
+                REQUEST_TIME
+            ),
             uuid_factory=lambda: (
                 REQUEST_EVENT_ID
             ),
@@ -195,13 +295,10 @@ def test_event_pipeline_ingests_processes_and_publishes_completion(
         == CORRELATION_ID
     )
 
-    pending = (
+    assert (
         queue.list_pending()
+        == [request]
     )
-
-    assert pending == [
-        request
-    ]
 
     ingestion_execution_store = (
         LocalIngestionExecutionStore(
@@ -362,147 +459,52 @@ def test_event_pipeline_ingests_processes_and_publishes_completion(
         raw_payloads
     ) == 1
 
-    processing_execution_store = (
-        LocalProcessingExecutionStore(
-            events_root=events_root,
-        )
-    )
-
-    processing_retry_store = (
-        LocalProcessingRetryStore(
-            events_root=events_root,
-        )
-    )
-
-    processing_runner = (
+    #
+    # Perform the real local Spark work.
+    #
+    # This gives us actual processed
+    # Parquet datasets and an actual
+    # quality report.
+    #
+    local_processing_runner = (
         SparkProcessingEventRunner(
             spark=spark,
             lake_root=lake_root,
         )
     )
 
-    processing_worker = (
-        ProcessingWorker(
-            queue=queue,
-            runner=processing_runner,
-            execution_store=(
-                processing_execution_store
+    processing_reference = (
+        local_processing_runner.run(
+            provider="bipad",
+            endpoint="river-stations",
+            run_id=expected_run_id,
+            manifest_path=(
+                manifest_path_value
             ),
-            retry_store=(
-                processing_retry_store
-            ),
-            clock=lambda: (
-                PROCESSING_COMPLETED_TIME
-            ),
-            uuid_factory=lambda: (
-                PROCESSING_COMPLETED_EVENT_ID
+            idempotency_key=(
+                INGESTION_COMPLETED_EVENT_ID
             ),
         )
     )
 
     assert (
-        processing_worker.run_once()
-        == 1
-    )
-
-    assert (
-        processing_retry_store.get(
-            INGESTION_COMPLETED_EVENT_ID
-        )
-        is None
-    )
-
-    processing_execution = (
-        processing_execution_store.get(
-            INGESTION_COMPLETED_EVENT_ID
-        )
-    )
-
-    assert (
-        processing_execution
-        is not None
-    )
-
-    assert (
-        processing_execution.run_id
+        processing_reference.run_id
         == expected_run_id
-    )
-
-    assert (
-        processing_execution
-        .completion_event_id
-        == PROCESSING_COMPLETED_EVENT_ID
-    )
-
-    pending = (
-        queue.list_pending()
-    )
-
-    assert len(
-        pending
-    ) == 1
-
-    processing_completed = (
-        pending[0]
-    )
-
-    assert (
-        processing_completed.event_id
-        == PROCESSING_COMPLETED_EVENT_ID
-    )
-
-    assert (
-        processing_completed.event_type
-        is EventType.PROCESSING_COMPLETED
-    )
-
-    assert (
-        processing_completed
-        .correlation_id
-        == CORRELATION_ID
-    )
-
-    assert (
-        processing_completed.data[
-            "run_id"
-        ]
-        == expected_run_id
-    )
-
-    assert (
-        processing_completed.data[
-            "ingestion_event_id"
-        ]
-        == str(
-            INGESTION_COMPLETED_EVENT_ID
-        )
-    )
-
-    assert (
-        processing_completed.data[
-            "request_event_id"
-        ]
-        == str(
-            REQUEST_EVENT_ID
-        )
     )
 
     station_path_value = (
-        processing_completed.data[
-            "station_output_path"
-        ]
+        processing_reference
+        .station_output_path
     )
 
     observation_path_value = (
-        processing_completed.data[
-            "observation_output_path"
-        ]
+        processing_reference
+        .observation_output_path
     )
 
     quality_path_value = (
-        processing_completed.data[
-            "quality_report_path"
-        ]
+        processing_reference
+        .quality_report_path
     )
 
     assert isinstance(
@@ -512,11 +514,6 @@ def test_event_pipeline_ingests_processes_and_publishes_completion(
 
     assert isinstance(
         observation_path_value,
-        str,
-    )
-
-    assert isinstance(
-        quality_path_value,
         str,
     )
 
@@ -604,6 +601,344 @@ def test_event_pipeline_ingests_processes_and_publishes_completion(
         in report_text
     )
 
+    #
+    # Adapt the real local processing
+    # result into the cloud-processing
+    # result contract.
+    #
+    # We are testing the cloud job's
+    # completion boundary here; the
+    # Spark transformation itself has
+    # already run for real above.
+    #
+    cloud_store = (
+        InMemoryProcessingCloudStore()
+    )
+
+    cloud_result = (
+        CloudProcessingRunResult(
+            run_id=expected_run_id,
+            endpoint=(
+                processing_job
+                .BipadEndpoint
+                .RIVER_STATIONS
+            ),
+            outputs=(
+                CloudProcessingDatasetResult(
+                    dataset=(
+                        ProcessedDataset
+                        .STATIONS
+                    ),
+                    key=(
+                        station_path_value
+                    ),
+                    uri=(
+                        f"gs://"
+                        f"{cloud_store.bucket_name}/"
+                        f"{station_path_value}"
+                    ),
+                    row_count=(
+                        stations.count()
+                    ),
+                ),
+                CloudProcessingDatasetResult(
+                    dataset=(
+                        ProcessedDataset
+                        .OBSERVATIONS
+                    ),
+                    key=(
+                        observation_path_value
+                    ),
+                    uri=(
+                        f"gs://"
+                        f"{cloud_store.bucket_name}/"
+                        f"{observation_path_value}"
+                    ),
+                    row_count=(
+                        observations.count()
+                    ),
+                ),
+            ),
+            quality_report_key=(
+                quality_path_value
+            ),
+            quality_report_uri=(
+                f"gs://"
+                f"{cloud_store.bucket_name}/"
+                f"{quality_path_value}"
+            ),
+        )
+    )
+
+    def fake_process_gcs_manifest(
+        *,
+        spark: SparkSession,
+        store: object,
+        manifest_key: str,
+    ) -> CloudProcessingRunResult:
+        _ = (
+            spark,
+            store,
+        )
+
+        assert (
+            manifest_key
+            == manifest_path_value
+        )
+
+        return cloud_result
+
+    monkeypatch.setattr(
+        processing_job,
+        "process_gcs_manifest",
+        fake_process_gcs_manifest,
+    )
+
+    #
+    # Managed Spark job boundary:
+    #
+    # This must persist a durable receipt
+    # but MUST NOT publish processing.completed.
+    #
+    completion_event = (
+        processing_job.run_processing_job(
+            spark=spark,
+            store=cloud_store,
+            ingestion_event=(
+                ingestion_completed
+            ),
+            clock=lambda: (
+                PROCESSING_COMPLETED_TIME
+            ),
+        )
+    )
+
+    assert (
+        completion_event.event_type
+        is EventType.PROCESSING_COMPLETED
+    )
+
+    assert (
+        completion_event.event_id
+        == processing_job
+        .processing_completion_event_id(
+            INGESTION_COMPLETED_EVENT_ID
+        )
+    )
+
+    assert (
+        completion_event.occurred_at
+        == PROCESSING_COMPLETED_TIME
+    )
+
+    assert (
+        completion_event.correlation_id
+        == CORRELATION_ID
+    )
+
+    assert (
+        completion_event.data[
+            "run_id"
+        ]
+        == expected_run_id
+    )
+
+    assert (
+        completion_event.data[
+            "ingestion_event_id"
+        ]
+        == str(
+            INGESTION_COMPLETED_EVENT_ID
+        )
+    )
+
+    assert (
+        completion_event.data[
+            "request_event_id"
+        ]
+        == str(
+            REQUEST_EVENT_ID
+        )
+    )
+
+    assert (
+        completion_event.data[
+            "manifest_path"
+        ]
+        == manifest_path_value
+    )
+
+    assert (
+        completion_event.data[
+            "quality_report_path"
+        ]
+        == quality_path_value
+    )
+
+    assert (
+        completion_event.data[
+            "station_output_path"
+        ]
+        == station_path_value
+    )
+
+    assert (
+        completion_event.data[
+            "observation_output_path"
+        ]
+        == observation_path_value
+    )
+
+    quality_parent = (
+        quality_path_value
+        .rsplit(
+            "/",
+            1,
+        )[0]
+    )
+
+    receipt_key = (
+        f"{quality_parent}/"
+        "processing-completed.json"
+    )
+
+    assert (
+        cloud_store.object_exists(
+            key=receipt_key
+        )
+    )
+
+    persisted_receipt = (
+        decode_event(
+            cloud_store.read_bytes(
+                key=receipt_key
+            )
+        )
+    )
+
+    assert (
+        persisted_receipt
+        == completion_event
+    )
+
+    receipt_keys = [
+        key
+        for key in cloud_store.objects
+        if key.endswith(
+            "/processing-completed.json"
+        )
+    ]
+
+    assert receipt_keys == [
+        receipt_key
+    ]
+
+    #
+    # Critical 3C architecture assertion:
+    #
+    # processing_job did not publish anything.
+    # The only pending event is still the
+    # ingestion.completed delivery.
+    #
+    assert (
+        queue.list_pending()
+        == [ingestion_completed]
+    )
+
+    #
+    # The processing request has now completed.
+    # This represents the successful Cloud Run /
+    # Pub/Sub processing delivery being ACKed.
+    #
+    queue.mark_processed(
+        INGESTION_COMPLETED_EVENT_ID
+    )
+
+    assert (
+        queue.list_pending()
+        == []
+    )
+
+    #
+    # Simulate the real Cloud Storage
+    # OBJECT_FINALIZE Pub/Sub notification
+    # generated when the durable receipt
+    # is created.
+    #
+    notification = (
+        decode_gcs_finalize_push(
+            {
+                "message": {
+                    "attributes": {
+                        "eventType": (
+                            "OBJECT_FINALIZE"
+                        ),
+                        "bucketId": (
+                            cloud_store
+                            .bucket_name
+                        ),
+                        "objectId": (
+                            receipt_key
+                        ),
+                        "objectGeneration": (
+                            "1"
+                        ),
+                    }
+                }
+            }
+        )
+    )
+
+    relayed_event = (
+        relay_processing_completion(
+            notification=notification,
+            store=cloud_store,
+            publisher=queue,
+        )
+    )
+
+    assert (
+        relayed_event
+        == completion_event
+    )
+
+    pending = (
+        queue.list_pending()
+    )
+
+    assert pending == [
+        completion_event
+    ]
+
+    processing_completed = (
+        pending[0]
+    )
+
+    assert (
+        processing_completed.event_type
+        is EventType.PROCESSING_COMPLETED
+    )
+
+    assert (
+        processing_completed.event_id
+        == completion_event.event_id
+    )
+
+    assert (
+        processing_completed.occurred_at
+        == PROCESSING_COMPLETED_TIME
+    )
+
+    assert (
+        processing_completed.correlation_id
+        == CORRELATION_ID
+    )
+
+    #
+    # The request and ingestion event
+    # deliveries must both be durable
+    # processed records now.
+    #
     request_processed_path = (
         events_root
         / "processed"
@@ -634,39 +969,26 @@ def test_event_pipeline_ingests_processes_and_publishes_completion(
         / f"{REQUEST_EVENT_ID}.json"
     ).is_file()
 
-    assert (
-        events_root
-        / "idempotency"
-        / "processing"
-        / (
-            f"{INGESTION_COMPLETED_EVENT_ID}"
-            ".json"
-        )
-    ).is_file()
-
     failed_path = (
-            events_root
-            / "failed"
+        events_root
+        / "failed"
     )
 
     assert (
-            not failed_path.is_dir()
-            or not any(
-        failed_path.iterdir()
-    )
+        not failed_path.is_dir()
+        or not any(
+            failed_path.iterdir()
+        )
     )
 
-    # No stage should rerun work now.
-    # The only pending delivery is
-    # processing.completed, which both
-    # workers intentionally ignore.
+    #
+    # Nothing should cause ingestion to
+    # run again. processing.completed is
+    # intentionally irrelevant to the
+    # ingestion worker.
+    #
     assert (
         ingestion_worker.run_once()
-        == 0
-    )
-
-    assert (
-        processing_worker.run_once()
         == 0
     )
 

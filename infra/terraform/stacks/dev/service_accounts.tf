@@ -11,12 +11,21 @@ locals {
       display_name = "RiverWatch ${var.environment} processing"
       description  = "Runtime identity for RiverWatch Spark processing."
     }
+
     processing_gateway = {
       account_id = "${local.name_prefix}-proc-gw"
 
       display_name = "RiverWatch ${var.environment} processing gateway"
 
       description = "Cloud Run identity that submits RiverWatch Managed Spark batches."
+    }
+
+    processing_relay = {
+      account_id = "${local.name_prefix}-proc-relay"
+
+      display_name = "RiverWatch ${var.environment} processing completion relay"
+
+      description = "Cloud Run identity that relays durable processing completion receipts."
     }
 
     api = {

@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+google-cloud-storage>=3.0,<4.0
+google-cloud-pubsub>=2.42,<3.0

@@ -36,7 +36,7 @@ class ProcessingInputPage(BaseModel):
         min_length=1,
     )
 
-    payload_path: Path
+    payload_path: str | Path
 
     payload_sha256: str = Field(
         pattern=r"^[0-9a-f]{64}$",
@@ -58,7 +58,7 @@ class ProcessingInputRun(BaseModel):
 
     captured_at: datetime
 
-    manifest_path: Path
+    manifest_path: str | Path
 
     pages: tuple[
         ProcessingInputPage,
