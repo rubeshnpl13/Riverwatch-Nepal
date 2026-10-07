@@ -1,6 +1,7 @@
 locals {
-  api_image = "${module.container_registry.docker_repository_uri}/api:phase-11-placeholder"
-
+  api_image = (
+    "${module.container_registry.docker_repository_uri}/api:${local.container_release_tag}"
+  )
 }
 
 

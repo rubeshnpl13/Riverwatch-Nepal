@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from collections.abc import (
     AsyncIterator,
+    Callable,
 )
 from contextlib import (
     asynccontextmanager,
@@ -13,6 +16,9 @@ from fastapi.middleware.cors import (
 
 from riverwatch.analytics.catalog import (
     create_analytics_connection,
+)
+from riverwatch.analytics.protocol import (
+    AnalyticsReader,
 )
 from riverwatch.analytics.service import (
     AnalyticsService,
@@ -42,10 +48,60 @@ DEFAULT_CORS_ORIGINS = (
 )
 
 
+AnalyticsServiceFactory = Callable[
+    [],
+    AnalyticsReader,
+]
+
+
+def _close_analytics_service(
+    service: AnalyticsReader,
+) -> None:
+    close = getattr(
+        service,
+        "close",
+        None,
+    )
+
+    if callable(
+        close
+    ):
+        close()
+
+
 @asynccontextmanager
 async def lifespan(
     app: FastAPI,
 ) -> AsyncIterator[None]:
+    factory: (
+        AnalyticsServiceFactory
+        | None
+    ) = (
+        app.state
+        .analytics_service_factory
+    )
+
+    if factory is not None:
+        service = factory()
+
+        app.state.analytics_service = (
+            service
+        )
+
+        try:
+            yield
+
+        finally:
+            app.state.analytics_service = (
+                None
+            )
+
+            _close_analytics_service(
+                service
+            )
+
+        return
+
     lake_root: Path = (
         app.state.lake_root
     )
@@ -66,7 +122,9 @@ async def lifespan(
         yield
 
     finally:
-        app.state.analytics_service = None
+        app.state.analytics_service = (
+            None
+        )
 
         connection.close()
 
@@ -77,12 +135,16 @@ def create_app(
     cors_origins: (
         tuple[str, ...] | None
     ) = None,
+    analytics_service_factory: (
+        AnalyticsServiceFactory
+        | None
+    ) = None,
 ) -> FastAPI:
     app = FastAPI(
         title="RiverWatch API",
         description=(
-            "Read-only API for RiverWatch river "
-            "monitoring and analytics. "
+            "Read-only API for RiverWatch "
+            "river monitoring and analytics. "
             "RiverWatch freshness and quality "
             "metrics are not official flood "
             "warnings."
@@ -95,6 +157,10 @@ def create_app(
         DEFAULT_LAKE_ROOT
         if lake_root is None
         else lake_root
+    )
+
+    app.state.analytics_service_factory = (
+        analytics_service_factory
     )
 
     origins = (

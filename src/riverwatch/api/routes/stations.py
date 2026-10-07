@@ -7,8 +7,8 @@ from fastapi import (
     status,
 )
 
-from riverwatch.analytics.service import (
-    AnalyticsService,
+from riverwatch.analytics.protocol import (
+    AnalyticsReader,
 )
 from riverwatch.api.dependencies import (
     get_analytics_service,
@@ -34,7 +34,7 @@ router = APIRouter(
 )
 def list_current_stations(
     analytics: Annotated[
-        AnalyticsService,
+        AnalyticsReader,
         Depends(
             get_analytics_service
         ),
@@ -65,7 +65,7 @@ def list_current_stations(
 def get_current_station(
     station_id: str,
     analytics: Annotated[
-        AnalyticsService,
+        AnalyticsReader,
         Depends(
             get_analytics_service
         ),

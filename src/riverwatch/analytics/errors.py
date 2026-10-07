@@ -20,3 +20,8 @@ class InvalidAnalyticsQueryError(
     ValueError
 ):
     pass
+
+class BigQueryAnalyticsError(
+    RuntimeError
+):
+    """A BigQuery analytics query failed."""

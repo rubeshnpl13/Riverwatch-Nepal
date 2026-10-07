@@ -12,8 +12,8 @@ from pydantic import AwareDatetime
 from riverwatch.analytics.errors import (
     InvalidAnalyticsQueryError,
 )
-from riverwatch.analytics.service import (
-    AnalyticsService,
+from riverwatch.analytics.protocol import (
+    AnalyticsReader,
 )
 from riverwatch.api.dependencies import (
     get_analytics_service,
@@ -40,7 +40,7 @@ router = APIRouter(
 def get_station_history(
     station_id: str,
     analytics: Annotated[
-        AnalyticsService,
+        AnalyticsReader,
         Depends(
             get_analytics_service
         ),

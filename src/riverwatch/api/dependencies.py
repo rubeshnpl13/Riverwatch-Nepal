@@ -1,13 +1,13 @@
 from fastapi import Request
 
-from riverwatch.analytics.service import (
-    AnalyticsService,
+from riverwatch.analytics.protocol import (
+    AnalyticsReader,
 )
 
 
 def get_analytics_service(
     request: Request,
-) -> AnalyticsService:
+) -> AnalyticsReader:
     service = getattr(
         request.app.state,
         "analytics_service",
@@ -16,7 +16,7 @@ def get_analytics_service(
 
     if not isinstance(
         service,
-        AnalyticsService,
+        AnalyticsReader,
     ):
         raise RuntimeError(
             "AnalyticsService is not initialized"

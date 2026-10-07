@@ -5,8 +5,8 @@ from fastapi import (
     Depends,
 )
 
-from riverwatch.analytics.service import (
-    AnalyticsService,
+from riverwatch.analytics.protocol import (
+    AnalyticsReader,
 )
 from riverwatch.api.dependencies import (
     get_analytics_service,
@@ -32,7 +32,7 @@ router = APIRouter(
 )
 def list_basin_summaries(
     analytics: Annotated[
-        AnalyticsService,
+        AnalyticsReader,
         Depends(
             get_analytics_service
         ),
@@ -62,7 +62,7 @@ def list_basin_summaries(
 )
 def get_network_summary(
     analytics: Annotated[
-        AnalyticsService,
+        AnalyticsReader,
         Depends(
             get_analytics_service
         ),

@@ -171,6 +171,56 @@ output "observations_table_id" {
   )
 }
 
+output "station_observation_history_view_id" {
+  description = (
+    "Canonical station observation history view ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .station_observation_history
+    .id
+  )
+}
+
+
+output "current_river_snapshot_view_id" {
+  description = (
+    "Canonical current river snapshot view ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .current_river_snapshot
+    .id
+  )
+}
+
+
+output "basin_current_summary_view_id" {
+  description = (
+    "Canonical basin current summary view ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .basin_current_summary
+    .id
+  )
+}
+
+
+output "current_network_summary_view_id" {
+  description = (
+    "Canonical current network summary view ID."
+  )
+
+  value = (
+    google_bigquery_table
+    .current_network_summary
+    .id
+  )
+}
 
 output "container_repository_name" {
   description = "RiverWatch Artifact Registry repository."
