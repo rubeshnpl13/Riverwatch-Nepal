@@ -48,9 +48,10 @@ function formatTimestamp(
     return "Not available";
   }
 
-  const date = new Date(
-    value,
-  );
+  const date =
+    new Date(
+      value,
+    );
 
   if (
     Number.isNaN(
@@ -80,41 +81,87 @@ function formatTimestamp(
 function percentageWidth(
   value: number,
 ): string {
-  const clamped = Math.min(
-    Math.max(
-      value,
-      0,
-    ),
-    1,
-  );
+  const clamped =
+    Math.min(
+      Math.max(
+        value,
+        0,
+      ),
+      1,
+    );
 
   return `${clamped * 100}%`;
 }
 
 
-interface MetricCardProps {
+interface OverviewCardProps {
   label: string;
   value: string;
   detail: string;
+  progress?: number;
+  accent?: boolean;
 }
 
 
-function MetricCard({
+function OverviewCard({
   label,
   value,
   detail,
-}: MetricCardProps) {
+  progress,
+  accent = false,
+}: OverviewCardProps) {
   return (
-    <article className="metric-card">
-      <p className="metric-label">
-        {label}
-      </p>
+    <article
+      className={
+        accent
+          ? (
+            "overview-kpi-card "
+            + "overview-kpi-card--accent"
+          )
+          : "overview-kpi-card"
+      }
+    >
+      <div className="overview-kpi-top">
+        <p className="overview-kpi-label">
+          {label}
+        </p>
 
-      <p className="metric-value">
+        <span
+          className="overview-kpi-indicator"
+          aria-hidden="true"
+        />
+      </div>
+
+      <strong className="overview-kpi-value">
         {value}
-      </p>
+      </strong>
 
-      <p className="metric-detail">
+      {progress !== undefined && (
+        <div
+          className="overview-kpi-meter"
+          role="progressbar"
+          aria-label={label}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={
+            Math.round(
+              progress * 100,
+            )
+          }
+        >
+          <div
+            className="overview-kpi-meter-fill"
+            style={{
+              width:
+                percentageWidth(
+                  progress,
+                ),
+            }}
+          />
+        </div>
+      )}
+
+      <p className="overview-kpi-detail">
         {detail}
       </p>
     </article>
@@ -122,57 +169,30 @@ function MetricCard({
 }
 
 
-interface RatioCardProps {
+interface HealthItemProps {
   label: string;
-  value: number;
-  detail: string;
+  primary: string;
+  secondary: string;
 }
 
 
-function RatioCard({
+function HealthItem({
   label,
-  value,
-  detail,
-}: RatioCardProps) {
+  primary,
+  secondary,
+}: HealthItemProps) {
   return (
-    <article className="ratio-card">
-      <div className="ratio-heading">
-        <p className="metric-label">
-          {label}
-        </p>
+    <article className="network-health-card">
+      <p className="network-health-label">
+        {label}
+      </p>
 
-        <strong>
-          {formatPercent(
-            value,
-          )}
-        </strong>
-      </div>
+      <strong className="network-health-primary">
+        {primary}
+      </strong>
 
-      <div
-        className="ratio-track"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={
-          Math.round(
-            value * 100,
-          )
-        }
-      >
-        <div
-          className="ratio-fill"
-          style={{
-            width:
-              percentageWidth(
-                value,
-              ),
-          }}
-        />
-      </div>
-
-      <p className="metric-detail">
-        {detail}
+      <p className="network-health-secondary">
+        {secondary}
       </p>
     </article>
   );
@@ -185,7 +205,9 @@ export function NetworkOverview() {
     setSummary,
   ] = useState<
     CurrentNetworkSummary | null
-  >(null);
+  >(
+    null,
+  );
 
   const [
     hasError,
@@ -194,49 +216,54 @@ export function NetworkOverview() {
     false,
   );
 
-  useEffect(() => {
-    const controller =
-      new AbortController();
 
-    void getNetworkSummary(
-      controller.signal,
-    )
-      .then(
-        (
-          networkSummary,
-        ) => {
-          setSummary(
-            networkSummary,
-          );
+  useEffect(
+    () => {
+      const controller =
+        new AbortController();
 
-          setHasError(
-            false,
-          );
-        },
+      void getNetworkSummary(
+        controller.signal,
       )
-      .catch(
-        (
-          error: unknown,
-        ) => {
-          if (
-            error
-              instanceof DOMException
-            && error.name
-              === "AbortError"
-          ) {
-            return;
-          }
+        .then(
+          (
+            networkSummary,
+          ) => {
+            setSummary(
+              networkSummary,
+            );
 
-          setHasError(
-            true,
-          );
-        },
-      );
+            setHasError(
+              false,
+            );
+          },
+        )
+        .catch(
+          (
+            error: unknown,
+          ) => {
+            if (
+              error
+                instanceof DOMException
+              && error.name
+                === "AbortError"
+            ) {
+              return;
+            }
 
-    return () => {
-      controller.abort();
-    };
-  }, []);
+            setHasError(
+              true,
+            );
+          },
+        );
+
+      return () => {
+        controller.abort();
+      };
+    },
+    [],
+  );
+
 
   if (hasError) {
     return (
@@ -261,6 +288,7 @@ export function NetworkOverview() {
     );
   }
 
+
   if (summary === null) {
     return (
       <section
@@ -278,201 +306,199 @@ export function NetworkOverview() {
     );
   }
 
+
   return (
-    <section>
-      <div className="section-heading">
+    <section
+      className="overview-section"
+      aria-labelledby="network-overview-heading"
+    >
+      <div className="overview-heading">
         <div>
           <p className="section-label">
             Network overview
           </p>
 
-          <h2>
-            Current RiverWatch snapshot
+          <h2 id="network-overview-heading">
+            Current network snapshot
           </h2>
+
+          <p className="section-description">
+            A concise view of RiverWatch
+            station coverage and data
+            availability.
+          </p>
         </div>
 
-        <p className="snapshot-time">
-          Latest observation
-          {" "}
+        <div className="snapshot-pill">
+          <span>
+            Latest observation
+          </span>
+
           <strong>
             {formatTimestamp(
-              summary
-                .latest_observed_at,
+              summary.latest_observed_at,
             )}
           </strong>
-        </p>
+        </div>
       </div>
 
-      <div className="metrics-grid">
-        <MetricCard
-          label="Stations"
+
+      <div className="overview-kpi-grid">
+        <OverviewCard
+          label="Monitoring stations"
           value={
             formatNumber(
-              summary
-                .total_stations,
+              summary.total_stations,
             )
           }
-          detail="Stations in the current RiverWatch snapshot."
-        />
-
-        <MetricCard
-          label="Basins"
-          value={
-            formatNumber(
-              summary
-                .basins_represented,
-            )
+          detail={
+            `${formatNumber(
+              summary.basins_represented,
+            )} basin groups represented`
           }
-          detail="Distinct basin groups represented."
+          accent
         />
 
-        <MetricCard
-          label="With observation"
-          value={
-            formatNumber(
-              summary
-                .stations_with_observation,
-            )
-          }
-          detail="Stations with an observation in the current snapshot."
-        />
-
-        <MetricCard
-          label="Without observation"
-          value={
-            formatNumber(
-              summary
-                .stations_without_observation,
-            )
-          }
-          detail="Stations currently lacking an observation."
-        />
-
-        <MetricCard
-          label="Water level available"
-          value={
-            formatNumber(
-              summary
-                .observations_with_water_level,
-            )
-          }
-          detail="Current observations containing a water-level value."
-        />
-
-        <MetricCard
-          label="Water level missing"
-          value={
-            formatNumber(
-              summary
-                .observations_without_water_level,
-            )
-          }
-          detail="Current observations without a water-level value."
-        />
-      </div>
-
-      <div className="ratio-grid">
-        <RatioCard
+        <OverviewCard
           label="Observation coverage"
           value={
-            summary
-              .coverage_ratio
+            formatPercent(
+              summary.coverage_ratio,
+            )
+          }
+          progress={
+            summary.coverage_ratio
           }
           detail={
             `${formatNumber(
               summary
                 .stations_with_observation,
             )} of ${formatNumber(
-              summary
-                .total_stations,
-            )} stations have an observation.`
+              summary.total_stations,
+            )} stations reporting`
           }
         />
 
-        <RatioCard
+        <OverviewCard
           label="Observation freshness"
           value={
-            summary
-              .freshness_ratio
+            formatPercent(
+              summary.freshness_ratio,
+            )
+          }
+          progress={
+            summary.freshness_ratio
+          }
+          detail={
+            `${formatNumber(
+              summary.fresh_observations,
+            )} fresh · ${formatNumber(
+              summary.stale_observations,
+            )} stale`
+          }
+        />
+
+        <OverviewCard
+          label="Water-level coverage"
+          value={
+            formatNumber(
+              summary
+                .observations_with_water_level,
+            )
           }
           detail={
             `${formatNumber(
               summary
-                .fresh_observations,
-            )} fresh and ${formatNumber(
-              summary
-                .stale_observations,
-            )} stale observations.`
+                .observations_without_water_level,
+            )} current observations missing a value`
           }
         />
       </div>
 
-      <article className="observation-window">
-        <div>
-          <p className="metric-label">
-            Observation time range
-          </p>
 
-          <p>
-            <strong>
-              Oldest:
-            </strong>
-            {" "}
-            {formatTimestamp(
+      <div className="network-health-grid">
+        <HealthItem
+          label="Station availability"
+          primary={
+            `${formatNumber(
               summary
-                .oldest_observed_at,
-            )}
-          </p>
+                .stations_with_observation,
+            )} reporting`
+          }
+          secondary={
+            `${formatNumber(
+              summary
+                .stations_without_observation,
+            )} without an observation`
+          }
+        />
 
-          <p>
-            <strong>
-              Latest:
-            </strong>
-            {" "}
-            {formatTimestamp(
+        <HealthItem
+          label="Observation window"
+          primary={
+            formatTimestamp(
               summary
                 .latest_observed_at,
-            )}
-          </p>
-        </div>
+            )
+          }
+          secondary={
+            `Oldest: ${formatTimestamp(
+              summary
+                .oldest_observed_at,
+            )}`
+          }
+        />
 
-        <div>
-          <p className="metric-label">
-            Timestamp assessment
-          </p>
+        <HealthItem
+          label="Timestamp quality"
+          primary={
+            `${formatNumber(
+              summary
+                .future_observations,
+            )} future`
+          }
+          secondary={
+            `${formatNumber(
+              summary
+                .unassessable_observations,
+            )} unassessable`
+          }
+        />
 
-          <p>
-            Future observations:
-            {" "}
-            <strong>
-              {formatNumber(
-                summary
-                  .future_observations,
-              )}
-            </strong>
-          </p>
+        <HealthItem
+          label="Network composition"
+          primary={
+            `${formatNumber(
+              summary
+                .basins_represented,
+            )} basins`
+          }
+          secondary={
+            `${formatNumber(
+              summary
+                .total_stations,
+            )} monitoring stations`
+          }
+        />
+      </div>
 
-          <p>
-            Unassessable observations:
-            {" "}
-            <strong>
-              {formatNumber(
-                summary
-                  .unassessable_observations,
-              )}
-            </strong>
-          </p>
-        </div>
-      </article>
 
-      <p className="dashboard-disclaimer">
-        Freshness and coverage describe
-        RiverWatch data availability and
-        recency. They do not indicate
-        whether a river is safe or
-        dangerous and are not official
-        flood warnings.
-      </p>
+      <div className="dashboard-data-note">
+        <span
+          className="dashboard-data-note-icon"
+          aria-hidden="true"
+        >
+          i
+        </span>
+
+        <p>
+          Coverage and freshness describe
+          RiverWatch data availability
+          and recency. They do not indicate
+          flood danger, river safety or
+          official warning conditions.
+        </p>
+      </div>
     </section>
   );
 }
