@@ -8,3 +8,7 @@ class InvalidObjectKeyError(StorageError):
 
 class ObjectAlreadyExistsError(StorageError):
     """Raised when a create-only object already exists."""
+
+
+class ObjectNotFoundError(StorageError):
+    """Raised when a requested object does not exist."""

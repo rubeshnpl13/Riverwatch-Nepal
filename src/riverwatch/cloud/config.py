@@ -95,7 +95,6 @@ class IngestionCloudConfig:
             ),
         )
 
-
 @dataclass(
     frozen=True,
     slots=True,
@@ -107,11 +106,15 @@ class ProcessingGatewayCloudConfig:
     runtime_version: str
     workload_service_account: str
     container_image: str
+    lake_bucket: str
 
     @classmethod
     def from_environment(
         cls,
-        environment: Mapping[str, str] | None = None,
+        environment: Mapping[
+            str,
+            str,
+        ] | None = None,
     ) -> ProcessingGatewayCloudConfig:
         source = _environment_source(
             environment
@@ -134,13 +137,52 @@ class ProcessingGatewayCloudConfig:
                 source,
                 "RIVERWATCH_DATAPROC_RUNTIME_VERSION",
             ),
-            workload_service_account=_required_value(
-                source,
-                "RIVERWATCH_DATAPROC_WORKLOAD_SERVICE_ACCOUNT",
+            workload_service_account=(
+                _required_value(
+                    source,
+                    (
+                        "RIVERWATCH_DATAPROC_"
+                        "WORKLOAD_SERVICE_ACCOUNT"
+                    ),
+                )
             ),
             container_image=_required_value(
                 source,
-                "RIVERWATCH_DATAPROC_CONTAINER_IMAGE",
+                (
+                    "RIVERWATCH_DATAPROC_"
+                    "CONTAINER_IMAGE"
+                ),
+            ),
+            lake_bucket=_required_value(
+                source,
+                "RIVERWATCH_LAKE_BUCKET",
+            ),
+
+        )
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class ProcessingCompletionRelayCloudConfig:
+    lake_bucket: str
+    processing_completed_topic: str
+
+    @classmethod
+    def from_environment(
+        cls,
+        source: Mapping[str, str] = os.environ,
+    ) -> ProcessingCompletionRelayCloudConfig:
+        return cls(
+            lake_bucket=_required_value(
+                source,
+                "RIVERWATCH_LAKE_BUCKET",
+            ),
+            processing_completed_topic=(
+                _required_value(
+                    source,
+                    "RIVERWATCH_PROCESSING_COMPLETED_TOPIC",
+                )
             ),
         )
 

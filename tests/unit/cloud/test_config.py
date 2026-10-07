@@ -4,6 +4,7 @@ from riverwatch.cloud.config import (
     ApiCloudConfig,
     CloudConfigurationError,
     IngestionCloudConfig,
+    ProcessingCompletionRelayCloudConfig,
     ProcessingGatewayCloudConfig,
 )
 
@@ -64,6 +65,10 @@ def test_processing_gateway_cloud_config_loads_environment() -> None:
                     "riverwatch-test/repository/"
                     "processing-spark:test"
                 ),
+                "RIVERWATCH_LAKE_BUCKET": (
+                    "riverwatch-test-lake"
+                ),
+
             }
         )
     )
@@ -75,6 +80,16 @@ def test_processing_gateway_cloud_config_loads_environment() -> None:
 
     assert config.workload_service_account == (
         "processing@example.iam.gserviceaccount.com"
+    )
+
+    assert config.container_image == (
+        "asia-south1-docker.pkg.dev/"
+        "riverwatch-test/repository/"
+        "processing-spark:test"
+    )
+
+    assert config.lake_bucket == (
+        "riverwatch-test-lake"
     )
 
 
@@ -131,3 +146,37 @@ def test_api_cloud_config_rejects_non_bigquery_backend() -> None:
                 ),
             }
         )
+
+def test_loads_processing_completion_relay_cloud_config(
+) -> None:
+    source = {
+        "RIVERWATCH_LAKE_BUCKET": (
+            "riverwatch-test-lake"
+        ),
+        (
+            "RIVERWATCH_PROCESSING_COMPLETED_TOPIC"
+        ): (
+            "projects/test/topics/"
+            "processing-completed"
+        ),
+    }
+
+    config = (
+        ProcessingCompletionRelayCloudConfig
+        .from_environment(
+            source
+        )
+    )
+
+    assert (
+        config.lake_bucket
+        == "riverwatch-test-lake"
+    )
+
+    assert (
+        config.processing_completed_topic
+        == (
+            "projects/test/topics/"
+            "processing-completed"
+        )
+    )
